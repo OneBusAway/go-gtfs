@@ -11,7 +11,7 @@ func interpolateStopTimes(times []ScheduledStopTime) []ScheduledStopTime {
 	copy(result, times)
 	n := len(result)
 	if n == 0 {
-		return result
+		return nil
 	}
 
 	// Interpolate Arrival and Departure separately
@@ -57,7 +57,7 @@ func interpolateStopTimesByShapeDist(times []ScheduledStopTime) []ScheduledStopT
 	copy(result, times)
 	n := len(result)
 	if n == 0 {
-		return result
+		return nil
 	}
 
 	for tType := 0; tType < 2; tType++ {
