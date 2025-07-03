@@ -19,13 +19,14 @@ func almostEq(a, b time.Duration) bool {
 
 func TestInterpolateStopTimes_Normal(t *testing.T) {
 	st := []ScheduledStopTime{
-		{StopSequence: 1, ArrivalTime: dur("08:00:00"), DepartureTime: dur("08:05:00")},
+		{StopSequence: 1, ArrivalTime: dur("08:00:00"), DepartureTime: dur("08:05:00"), ExactTimes: true},
 		{StopSequence: 2, ArrivalTime: 0, DepartureTime: 0},
 		{StopSequence: 3, ArrivalTime: 0, DepartureTime: 0},
-		{StopSequence: 4, ArrivalTime: dur("08:30:00"), DepartureTime: dur("08:35:00")},
+		{StopSequence: 4, ArrivalTime: dur("08:30:00"), DepartureTime: dur("08:35:00"), ExactTimes: true},
 	}
 	wantArr := []time.Duration{dur("08:00:00"), dur("08:10:00"), dur("08:20:00"), dur("08:30:00")}
 	wantDep := []time.Duration{dur("08:05:00"), dur("08:15:00"), dur("08:25:00"), dur("08:35:00")}
+	wantTimePoint := []bool{true, false, false, true}
 
 	got := interpolateStopTimes(st)
 	for i := range got {
@@ -34,6 +35,9 @@ func TestInterpolateStopTimes_Normal(t *testing.T) {
 		}
 		if !almostEq(got[i].DepartureTime, wantDep[i]) {
 			t.Errorf("normal: depart %d: want %v got %v", i, wantDep[i], got[i].DepartureTime)
+		}
+		if got[i].ExactTimes != wantTimePoint[i] {
+			t.Errorf("timepoint %d: want %v got %v", i, wantTimePoint[i], got[i].ExactTimes)
 		}
 	}
 }
@@ -86,13 +90,14 @@ func TestInterpolateStopTimes_MissingLast(t *testing.T) {
 
 func TestInterpolateStopTimesByShapeDist_Normal(t *testing.T) {
 	st := []ScheduledStopTime{
-		{StopSequence: 1, ArrivalTime: dur("08:00:00"), DepartureTime: dur("08:05:00"), ShapeDistanceTraveled: ptr(0.0)},
+		{StopSequence: 1, ArrivalTime: dur("08:00:00"), DepartureTime: dur("08:05:00"), ShapeDistanceTraveled: ptr(0.0), ExactTimes: true},
 		{StopSequence: 2, ArrivalTime: 0, DepartureTime: 0, ShapeDistanceTraveled: ptr(3.5)},
 		{StopSequence: 3, ArrivalTime: 0, DepartureTime: 0, ShapeDistanceTraveled: ptr(7.0)},
-		{StopSequence: 4, ArrivalTime: dur("08:30:00"), DepartureTime: dur("08:35:00"), ShapeDistanceTraveled: ptr(10.5)},
+		{StopSequence: 4, ArrivalTime: dur("08:30:00"), DepartureTime: dur("08:35:00"), ShapeDistanceTraveled: ptr(10.5), ExactTimes: true},
 	}
 	wantArr := []time.Duration{dur("08:00:00"), dur("08:10:00"), dur("08:20:00"), dur("08:30:00")}
 	wantDep := []time.Duration{dur("08:05:00"), dur("08:15:00"), dur("08:25:00"), dur("08:35:00")}
+	wantTimePoint := []bool{true, false, false, true}
 
 	got := interpolateStopTimesByShapeDist(st)
 	for i := range got {
@@ -101,6 +106,9 @@ func TestInterpolateStopTimesByShapeDist_Normal(t *testing.T) {
 		}
 		if !almostEq(got[i].DepartureTime, wantDep[i]) {
 			t.Errorf("shape normal: depart %d: want %v got %v", i, wantDep[i], got[i].DepartureTime)
+		}
+		if got[i].ExactTimes != wantTimePoint[i] {
+			t.Errorf("timepoint %d: want %v got %v", i, wantTimePoint[i], got[i].ExactTimes)
 		}
 	}
 }
