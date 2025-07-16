@@ -3,8 +3,8 @@ package warnings
 import (
 	"fmt"
 
-	"github.com/jamespfennell/gtfs/constants"
-	"github.com/jamespfennell/gtfs/csv"
+	"github.com/OneBusAway/gtfs/constants"
+	"github.com/OneBusAway/gtfs/csv"
 )
 
 type StaticWarning struct {

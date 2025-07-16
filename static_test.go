@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OneBusAway/gtfs/constants"
+	"github.com/OneBusAway/gtfs/warnings"
 	"github.com/google/go-cmp/cmp"
-	"github.com/jamespfennell/gtfs/constants"
-	"github.com/jamespfennell/gtfs/warnings"
 )
 
 var (

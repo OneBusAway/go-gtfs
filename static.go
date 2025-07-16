@@ -12,9 +12,9 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/jamespfennell/gtfs/constants"
-	"github.com/jamespfennell/gtfs/csv"
-	"github.com/jamespfennell/gtfs/warnings"
+	"github.com/OneBusAway/gtfs/constants"
+	"github.com/OneBusAway/gtfs/csv"
+	"github.com/OneBusAway/gtfs/warnings"
 )
 
 // Static contains the parsed content for a single GTFS static message.

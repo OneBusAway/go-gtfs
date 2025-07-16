@@ -25,7 +25,7 @@
 syntax = "proto2";
 option java_package = "com.google.transit.realtime";
 package transit_realtime;
-option go_package = "github.com/jamespfennell/gtfs/proto";
+option go_package = "github.com/OneBusAway/gtfs/proto";
 
 // The contents of a feed message.
 // A feed is a continuous stream of feed messages. Each message in the stream is

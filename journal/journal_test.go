@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OneBusAway/gtfs"
 	"github.com/google/go-cmp/cmp"
-	"github.com/jamespfennell/gtfs"
 )
 
 const tripID1 = "123456_L_1"

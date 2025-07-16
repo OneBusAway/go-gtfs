@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OneBusAway/gtfs"
+	"github.com/OneBusAway/gtfs/extensions/nyctalerts"
+	"github.com/OneBusAway/gtfs/extensions/nycttrips"
+	"github.com/OneBusAway/gtfs/journal"
 	"github.com/fatih/color"
-	"github.com/jamespfennell/gtfs"
-	"github.com/jamespfennell/gtfs/extensions/nyctalerts"
-	"github.com/jamespfennell/gtfs/extensions/nycttrips"
-	"github.com/jamespfennell/gtfs/journal"
 	"github.com/urfave/cli/v2"
 )
 

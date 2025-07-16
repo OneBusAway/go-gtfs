@@ -3,8 +3,8 @@ package testutil
 import (
 	"testing"
 
-	"github.com/jamespfennell/gtfs"
-	gtfsrt "github.com/jamespfennell/gtfs/proto"
+	"github.com/OneBusAway/gtfs"
+	gtfsrt "github.com/OneBusAway/gtfs/proto"
 	"google.golang.org/protobuf/proto"
 )
 
