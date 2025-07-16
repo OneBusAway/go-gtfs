@@ -1,4 +1,4 @@
 version: v1
-name: buf.build/jamespfennell/gtfs
+name: buf.build/OneBusAway/gtfs
 #deps:
 #  - buf.build/googleapis/googleapis

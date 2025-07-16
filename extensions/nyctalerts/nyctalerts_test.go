@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamespfennell/gtfs"
-	"github.com/jamespfennell/gtfs/extensions/nyctalerts"
-	"github.com/jamespfennell/gtfs/internal/testutil"
-	gtfsrt "github.com/jamespfennell/gtfs/proto"
+	"github.com/OneBusAway/gtfs"
+	"github.com/OneBusAway/gtfs/extensions/nyctalerts"
+	"github.com/OneBusAway/gtfs/internal/testutil"
+	gtfsrt "github.com/OneBusAway/gtfs/proto"
 	"google.golang.org/protobuf/proto"
 )
 

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	gtfsrt "github.com/jamespfennell/gtfs/proto"
+	gtfsrt "github.com/OneBusAway/gtfs/proto"
 )
 
 func BenchmarkHashTrip(b *testing.B) {

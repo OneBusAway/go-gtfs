@@ -4,10 +4,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OneBusAway/gtfs"
+	"github.com/OneBusAway/gtfs/internal/testutil"
+	gtfsrt "github.com/OneBusAway/gtfs/proto"
 	"github.com/google/go-cmp/cmp"
-	"github.com/jamespfennell/gtfs"
-	"github.com/jamespfennell/gtfs/internal/testutil"
-	gtfsrt "github.com/jamespfennell/gtfs/proto"
 )
 
 const (

@@ -1,4 +1,4 @@
-module github.com/jamespfennell/gtfs
+module github.com/OneBusAway/gtfs
 
 go 1.18
 
