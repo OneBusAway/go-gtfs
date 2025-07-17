@@ -7,7 +7,7 @@ import (
 	"os"
 	"runtime/pprof"
 
-	"github.com/OneBusAway/gtfs"
+	"github.com/OneBusAway/go-gtfs"
 )
 
 var out = flag.String("out", "gtfs_package_profile.pb.gz", "file path to output the profile to")

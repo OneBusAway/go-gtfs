@@ -1,7 +1,7 @@
 package extensions
 
 import (
-	gtfsrt "github.com/OneBusAway/gtfs/proto"
+	gtfsrt "github.com/OneBusAway/go-gtfs/proto"
 )
 
 type Extension interface {

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/OneBusAway/gtfs/extensions"
-	gtfsrt "github.com/OneBusAway/gtfs/proto"
+	"github.com/OneBusAway/go-gtfs/extensions"
+	gtfsrt "github.com/OneBusAway/go-gtfs/proto"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -77,7 +77,7 @@ func Extension(opts ExtensionOpts) extensions.Extension {
 
 const (
 	// The value of the language field in the description string containing the metadata.
-	MetadataLanguage = "github.com/OneBusAway/gtfs/extensions/nyctalerts/Metadata"
+	MetadataLanguage = "github.com/OneBusAway/go-gtfs/extensions/nyctalerts/Metadata"
 )
 
 // Metadata contains some NYCT-specific information on the alert that cannot be mapped to standard GTFS
