@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/OneBusAway/gtfs/constants"
+	"github.com/OneBusAway/go-gtfs/constants"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/unicode"
 	"golang.org/x/text/transform"

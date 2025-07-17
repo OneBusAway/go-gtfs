@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OneBusAway/gtfs/constants"
-	"github.com/OneBusAway/gtfs/warnings"
+	"github.com/OneBusAway/go-gtfs/constants"
+	"github.com/OneBusAway/go-gtfs/warnings"
 	"github.com/google/go-cmp/cmp"
 )
 

@@ -10,7 +10,7 @@ import "proto/gtfs-realtime.proto";
 
 option java_package = "com.google.transit.realtime";
 package transit_realtime;
-option go_package = "github.com/OneBusAway/gtfs/proto";
+option go_package = "github.com/OneBusAway/go-gtfs/proto";
 
 // Mercury extensions for the Feed Header
 message MercuryFeedHeader {

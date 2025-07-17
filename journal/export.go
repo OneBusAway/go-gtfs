@@ -7,7 +7,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/OneBusAway/gtfs"
+	"github.com/OneBusAway/go-gtfs"
 )
 
 //go:embed trips.csv.tmpl

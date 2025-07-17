@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OneBusAway/gtfs"
-	"github.com/OneBusAway/gtfs/internal/testutil"
-	gtfsrt "github.com/OneBusAway/gtfs/proto"
+	"github.com/OneBusAway/go-gtfs"
+	"github.com/OneBusAway/go-gtfs/internal/testutil"
+	gtfsrt "github.com/OneBusAway/go-gtfs/proto"
 	"github.com/google/go-cmp/cmp"
 )
 

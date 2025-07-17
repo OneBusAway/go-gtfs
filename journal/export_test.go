@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OneBusAway/gtfs"
+	"github.com/OneBusAway/go-gtfs"
 )
 
 var trip Trip = Trip{

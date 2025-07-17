@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/OneBusAway/gtfs/extensions"
-	gtfsrt "github.com/OneBusAway/gtfs/proto"
+	"github.com/OneBusAway/go-gtfs/extensions"
+	gtfsrt "github.com/OneBusAway/go-gtfs/proto"
 	"google.golang.org/protobuf/proto"
 )
 

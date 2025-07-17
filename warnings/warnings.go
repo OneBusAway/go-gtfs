@@ -3,8 +3,8 @@ package warnings
 import (
 	"fmt"
 
-	"github.com/OneBusAway/gtfs/constants"
-	"github.com/OneBusAway/gtfs/csv"
+	"github.com/OneBusAway/go-gtfs/constants"
+	"github.com/OneBusAway/go-gtfs/csv"
 )
 
 type StaticWarning struct {

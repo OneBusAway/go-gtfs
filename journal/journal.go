@@ -8,8 +8,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/OneBusAway/gtfs"
-	"github.com/OneBusAway/gtfs/extensions/nycttrips"
+	"github.com/OneBusAway/go-gtfs"
+	"github.com/OneBusAway/go-gtfs/extensions/nycttrips"
 )
 
 type Journal struct {
