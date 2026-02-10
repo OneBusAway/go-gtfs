@@ -29,6 +29,8 @@ type Trip struct {
 
 	Vehicle *Vehicle
 
+	Delay *time.Duration
+
 	IsEntityInMessage bool
 }
 
@@ -382,6 +384,10 @@ func parseTripUpdate(tripUpdate *gtfsrt.TripUpdate, opts *ParseRealtimeOptions) 
 	trip := &Trip{
 		ID:                parseTripDescriptor(tripUpdate.Trip, opts),
 		IsEntityInMessage: true,
+	}
+	if tripUpdate.Delay != nil {
+		d := time.Duration(*tripUpdate.Delay) * time.Second
+		trip.Delay = &d
 	}
 	convertStopTimeEvent := func(stopTimeEvent *gtfsrt.TripUpdate_StopTimeEvent) *StopTimeEvent {
 		if stopTimeEvent == nil {

@@ -149,6 +149,90 @@ func TestRealtime(t *testing.T) {
 			}(),
 		},
 		{
+			name: "trip with delay",
+			in: []*gtfsrt.FeedEntity{
+				{
+					Id: ptr("1"),
+					TripUpdate: &gtfsrt.TripUpdate{
+						Trip: &gtfsrt.TripDescriptor{
+							TripId: ptr(tripID1),
+						},
+						Delay: ptr(int32(120)),
+						StopTimeUpdate: []*gtfsrt.TripUpdate_StopTimeUpdate{
+							{
+								StopId:       ptr(stopID1),
+								StopSequence: ptr(uint32(1)),
+								Arrival: &gtfsrt.TripUpdate_StopTimeEvent{
+									Time: ptr(int64(time1.Unix())),
+								},
+							},
+						},
+					},
+				},
+				{
+					Id: ptr("2"),
+					TripUpdate: &gtfsrt.TripUpdate{
+						Trip: &gtfsrt.TripDescriptor{
+							TripId: ptr(tripID2),
+						},
+						Delay: ptr(int32(-30)),
+					},
+				},
+				{
+					Id: ptr("3"),
+					TripUpdate: &gtfsrt.TripUpdate{
+						Trip: &gtfsrt.TripDescriptor{
+							TripId: ptr(tripID3),
+						},
+					},
+				},
+			},
+			want: func() *gtfs.Realtime {
+				delay120s := 120 * time.Second
+				delayNeg30s := -30 * time.Second
+
+				trip1 := gtfs.Trip{
+					ID: gtfs.TripID{
+						ID:          tripID1,
+						DirectionID: gtfs.DirectionID_Unspecified,
+					},
+					Delay: &delay120s,
+					StopTimeUpdates: []gtfs.StopTimeUpdate{
+						{
+							StopID:       ptr(stopID1),
+							StopSequence: ptr(uint32(1)),
+							Arrival: &gtfs.StopTimeEvent{
+								Time: &time1,
+							},
+						},
+					},
+					IsEntityInMessage: true,
+				}
+
+				trip2 := gtfs.Trip{
+					ID: gtfs.TripID{
+						ID:          tripID2,
+						DirectionID: gtfs.DirectionID_Unspecified,
+					},
+					Delay:             &delayNeg30s,
+					IsEntityInMessage: true,
+				}
+
+				trip3 := gtfs.Trip{
+					ID: gtfs.TripID{
+						ID:          tripID3,
+						DirectionID: gtfs.DirectionID_Unspecified,
+					},
+					IsEntityInMessage: true,
+				}
+
+				return &gtfs.Realtime{
+					CreatedAt: createTime,
+					Trips:     []gtfs.Trip{trip1, trip2, trip3},
+				}
+			}(),
+		},
+		{
 			name: "vehicle",
 			in: []*gtfsrt.FeedEntity{
 				{
