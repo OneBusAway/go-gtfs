@@ -1355,3 +1355,104 @@ func (z *zipBuilder) build() []byte {
 func ptr[T any](t T) *T {
 	return &t
 }
+
+func TestParseStatic_PickupDropOffTypeDefaults(t *testing.T) {
+	const header = "stop_id,trip_id,arrival_time,departure_time,stop_sequence"
+
+	for _, tc := range []struct {
+		desc            string
+		stopTimes       []string
+		expectedPickup  PickupDropOffPolicy
+		expectedDropOff PickupDropOffPolicy
+	}{
+		{
+			desc: "columns absent",
+			stopTimes: []string{
+				header,
+				"stop_id,trip_id,04:05:06,13:14:15,50",
+			},
+			expectedPickup:  PickupDropOffPolicy_Yes,
+			expectedDropOff: PickupDropOffPolicy_Yes,
+		},
+		{
+			desc: "columns present but blank",
+			stopTimes: []string{
+				header + ",pickup_type,drop_off_type",
+				"stop_id,trip_id,04:05:06,13:14:15,50,,",
+			},
+			expectedPickup:  PickupDropOffPolicy_Yes,
+			expectedDropOff: PickupDropOffPolicy_Yes,
+		},
+		{
+			desc: "explicit zero",
+			stopTimes: []string{
+				header + ",pickup_type,drop_off_type",
+				"stop_id,trip_id,04:05:06,13:14:15,50,0,0",
+			},
+			expectedPickup:  PickupDropOffPolicy_Yes,
+			expectedDropOff: PickupDropOffPolicy_Yes,
+		},
+		{
+			desc: "explicit one is still not allowed",
+			stopTimes: []string{
+				header + ",pickup_type,drop_off_type",
+				"stop_id,trip_id,04:05:06,13:14:15,50,1,1",
+			},
+			expectedPickup:  PickupDropOffPolicy_No,
+			expectedDropOff: PickupDropOffPolicy_No,
+		},
+		{
+			desc: "restricted policies are preserved",
+			stopTimes: []string{
+				header + ",pickup_type,drop_off_type",
+				"stop_id,trip_id,04:05:06,13:14:15,50,2,3",
+			},
+			expectedPickup:  PickupDropOffPolicy_PhoneAgency,
+			expectedDropOff: PickupDropOffPolicy_CoordinateWithDriver,
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			content := newZipBuilderWithDefaults().add("stop_times.txt", tc.stopTimes...).build()
+
+			static, err := ParseStatic(content, ParseStaticOptions{})
+			if err != nil {
+				t.Fatalf("ParseStatic() got error %v, want nil", err)
+			}
+			if len(static.Trips) != 1 || len(static.Trips[0].StopTimes) != 1 {
+				t.Fatalf("got %d trips, want exactly 1 trip holding exactly 1 stop time", len(static.Trips))
+			}
+
+			stopTime := static.Trips[0].StopTimes[0]
+			if stopTime.PickupType != tc.expectedPickup {
+				t.Errorf("PickupType = %v, want %v", stopTime.PickupType, tc.expectedPickup)
+			}
+			if stopTime.DropOffType != tc.expectedDropOff {
+				t.Errorf("DropOffType = %v, want %v", stopTime.DropOffType, tc.expectedDropOff)
+			}
+		})
+	}
+}
+
+func TestParseStatic_ContinuousPickupDropOffDefaultToNo(t *testing.T) {
+	// GTFS defaults continuous_pickup/continuous_drop_off to 1, unlike
+	// pickup_type/drop_off_type. This pins that difference so the two do not get
+	// "fixed" together.
+	content := newZipBuilderWithDefaults().add(
+		"stop_times.txt",
+		"stop_id,trip_id,arrival_time,departure_time,stop_sequence",
+		"stop_id,trip_id,04:05:06,13:14:15,50",
+	).build()
+
+	static, err := ParseStatic(content, ParseStaticOptions{})
+	if err != nil {
+		t.Fatalf("ParseStatic() got error %v, want nil", err)
+	}
+
+	stopTime := static.Trips[0].StopTimes[0]
+	if stopTime.ContinuousPickup != PickupDropOffPolicy_No {
+		t.Errorf("ContinuousPickup = %v, want %v", stopTime.ContinuousPickup, PickupDropOffPolicy_No)
+	}
+	if stopTime.ContinuousDropOff != PickupDropOffPolicy_No {
+		t.Errorf("ContinuousDropOff = %v, want %v", stopTime.ContinuousDropOff, PickupDropOffPolicy_No)
+	}
+}
