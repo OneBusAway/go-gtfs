@@ -1434,25 +1434,44 @@ func TestParseStatic_PickupDropOffTypeDefaults(t *testing.T) {
 }
 
 func TestParseStatic_ContinuousPickupDropOffDefaultToNo(t *testing.T) {
-	// GTFS defaults continuous_pickup/continuous_drop_off to 1, unlike
-	// pickup_type/drop_off_type. This pins that difference so the two do not get
-	// "fixed" together.
-	content := newZipBuilderWithDefaults().add(
-		"stop_times.txt",
-		"stop_id,trip_id,arrival_time,departure_time,stop_sequence",
-		"stop_id,trip_id,04:05:06,13:14:15,50",
-	).build()
+	// GTFS defaults continuous_pickup/continuous_drop_off to 1 (No), unlike
+	// pickup_type/drop_off_type which default to 0 (Yes). This pins that
+	// difference so the two fields do not get "fixed" together. Both the
+	// absent-column case and the present-but-blank-cell case must default to No.
+	for _, tc := range []struct {
+		desc      string
+		stopTimes []string
+	}{
+		{
+			desc: "absent columns default to No",
+			stopTimes: []string{
+				"stop_id,trip_id,arrival_time,departure_time,stop_sequence",
+				"stop_id,trip_id,04:05:06,13:14:15,50",
+			},
+		},
+		{
+			desc: "blank cells default to No",
+			stopTimes: []string{
+				"stop_id,trip_id,arrival_time,departure_time,stop_sequence,continuous_pickup,continuous_drop_off",
+				"stop_id,trip_id,04:05:06,13:14:15,50,,",
+			},
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			content := newZipBuilderWithDefaults().add("stop_times.txt", tc.stopTimes...).build()
 
-	static, err := ParseStatic(content, ParseStaticOptions{})
-	if err != nil {
-		t.Fatalf("ParseStatic() got error %v, want nil", err)
-	}
+			static, err := ParseStatic(content, ParseStaticOptions{})
+			if err != nil {
+				t.Fatalf("ParseStatic() got error %v, want nil", err)
+			}
 
-	stopTime := static.Trips[0].StopTimes[0]
-	if stopTime.ContinuousPickup != PickupDropOffPolicy_No {
-		t.Errorf("ContinuousPickup = %v, want %v", stopTime.ContinuousPickup, PickupDropOffPolicy_No)
-	}
-	if stopTime.ContinuousDropOff != PickupDropOffPolicy_No {
-		t.Errorf("ContinuousDropOff = %v, want %v", stopTime.ContinuousDropOff, PickupDropOffPolicy_No)
+			stopTime := static.Trips[0].StopTimes[0]
+			if stopTime.ContinuousPickup != PickupDropOffPolicy_No {
+				t.Errorf("ContinuousPickup = %v, want %v", stopTime.ContinuousPickup, PickupDropOffPolicy_No)
+			}
+			if stopTime.ContinuousDropOff != PickupDropOffPolicy_No {
+				t.Errorf("ContinuousDropOff = %v, want %v", stopTime.ContinuousDropOff, PickupDropOffPolicy_No)
+			}
+		})
 	}
 }
