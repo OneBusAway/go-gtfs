@@ -819,12 +819,12 @@ func parseScheduledStopTimes(csv *csv.File, stops []Stop, trips []ScheduledTrip)
 			ArrivalTime:           arrival,
 			StopSequence:          stopSequence,
 			DepartureTime:         departure,
-			PickupType:            parsePickupDropOffPolicy(pickupTypeColumn.ReadOr("")),
-			DropOffType:           parsePickupDropOffPolicy(dropOffTypeColumn.ReadOr("")),
+			PickupType:            parsePickupDropOffPolicyOrYes(pickupTypeColumn.Read()),
+			DropOffType:           parsePickupDropOffPolicyOrYes(dropOffTypeColumn.Read()),
 			ContinuousPickup:      parsePickupDropOffPolicy(continuousPickupColumn.ReadOr("")),
 			ContinuousDropOff:     parsePickupDropOffPolicy(continuousDropOffColumn.ReadOr("")),
 			ShapeDistanceTraveled: parseFloat64(shapeDistanceTraveledColumn.Read()),
-			ExactTimes:            timepointColumn.ReadOr("1") == "1",
+			ExactTimes:            timepointColumn.ReadOr("1") != "0",
 		}
 		tripID := tripIDColumn.Read()
 		if currentTrip == nil || currentTripID != tripID {

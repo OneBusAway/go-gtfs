@@ -140,6 +140,18 @@ func parsePickupDropOffPolicy(s string) PickupDropOffPolicy {
 	}
 }
 
+// parsePickupDropOffPolicyOrYes parses a stop_times.txt pickup_type or
+// drop_off_type cell, which the GTFS spec defines as 0 (regularly scheduled)
+// when empty or absent. This differs from continuous_pickup and
+// continuous_drop_off, which default to 1, so those keep using
+// parsePickupDropOffPolicy directly.
+func parsePickupDropOffPolicyOrYes(s string) PickupDropOffPolicy {
+	if s == "" {
+		return PickupDropOffPolicy_Yes
+	}
+	return parsePickupDropOffPolicy(s)
+}
+
 func (t PickupDropOffPolicy) String() string {
 	switch t {
 	case PickupDropOffPolicy_Yes:
