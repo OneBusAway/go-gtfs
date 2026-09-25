@@ -557,6 +557,64 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
+			desc: "stop time with only one of arrival and departure time",
+			content: newZipBuilder().add(
+				"agency.txt",
+				"agency_id,agency_name,agency_url,agency_timezone\na,b,c,d",
+			).add(
+				"routes.txt",
+				"route_id,route_type\nroute_id,3",
+			).add(
+				"stops.txt",
+				"stop_id\nstop_id",
+			).add(
+				"calendar.txt",
+				"service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n"+
+					"service_id,0,0,0,0,0,0,0,20220504,20220507",
+			).add(
+				"trips.txt",
+				"route_id,service_id,trip_id\nroute_id,service_id,a",
+			).add(
+				"stop_times.txt",
+				"stop_id,trip_id,arrival_time,departure_time,stop_sequence",
+				"stop_id,a,04:05:06,,1",
+				"stop_id,a,,13:14:15,2",
+			).build(),
+			expected: &Static{
+				Agencies: []Agency{defaultAgency},
+				Routes:   []Route{defaultRoute},
+				Services: []Service{defaultService},
+				Stops:    []Stop{defaultStop},
+				Trips: []ScheduledTrip{
+					{
+						Route:   &defaultRoute,
+						Service: &defaultService,
+						ID:      "a",
+						StopTimes: []ScheduledStopTime{
+							{
+								Stop:              &defaultStop,
+								StopSequence:      1,
+								ArrivalTime:       4*time.Hour + 5*time.Minute + 6*time.Second,
+								DepartureTime:     4*time.Hour + 5*time.Minute + 6*time.Second,
+								ContinuousPickup:  PickupDropOffPolicy_No,
+								ContinuousDropOff: PickupDropOffPolicy_No,
+								ExactTimes:        true,
+							},
+							{
+								Stop:              &defaultStop,
+								StopSequence:      2,
+								ArrivalTime:       13*time.Hour + 14*time.Minute + 15*time.Second,
+								DepartureTime:     13*time.Hour + 14*time.Minute + 15*time.Second,
+								ContinuousPickup:  PickupDropOffPolicy_No,
+								ContinuousDropOff: PickupDropOffPolicy_No,
+								ExactTimes:        true,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			desc: "stop with spaces in lat/lon",
 			content: newZipBuilder().add(
 				"stops.txt",

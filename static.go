@@ -800,10 +800,10 @@ func parseScheduledStopTimes(csv *csv.File, stops []Stop, trips []ScheduledTrip)
 		departure, departureOk := parseGtfsTimeToDuration(departureTimeColumn.Read())
 
 		if !departureOk {
-			arrival = departure
+			departure = arrival
 		}
 		if !arrivalOk {
-			departure = arrival
+			arrival = departure
 		}
 		if len(shapeDistanceTraveledColumn.Read()) > 0 {
 			hasNonEmptyShapeDistRow = true
