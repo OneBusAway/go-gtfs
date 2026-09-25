@@ -995,3 +995,43 @@ func (w WheelchairBoarding) String() string {
 		return "UNKNOWN"
 	}
 }
+
+// BookingType describes how far in advance an on-demand trip can be booked.
+//
+// This is a Go representation of the enum described in the `booking_type` field of `booking_rules.txt`.
+type BookingType int32
+
+const (
+	// Real-time booking.
+	BookingType_RealTime BookingType = 0
+	// Up to same-day booking with advance notice.
+	BookingType_SameDay BookingType = 1
+	// Up to prior day(s) booking.
+	BookingType_PriorDays BookingType = 2
+)
+
+func parseBookingType(s string) (BookingType, bool) {
+	switch s {
+	case "0":
+		return BookingType_RealTime, true
+	case "1":
+		return BookingType_SameDay, true
+	case "2":
+		return BookingType_PriorDays, true
+	default:
+		return BookingType_RealTime, false
+	}
+}
+
+func (b BookingType) String() string {
+	switch b {
+	case BookingType_RealTime:
+		return "REAL_TIME"
+	case BookingType_SameDay:
+		return "SAME_DAY"
+	case BookingType_PriorDays:
+		return "PRIOR_DAYS"
+	default:
+		return "UNKNOWN"
+	}
+}
