@@ -914,10 +914,10 @@ func (r *stopTimeReader) read() (ScheduledStopTime, bool) {
 	departure, departureOk := parseGtfsTimeToDuration(r.departureTimeColumn.Read())
 
 	if !departureOk {
-		arrival = departure
+		departure = arrival
 	}
 	if !arrivalOk {
-		departure = arrival
+		arrival = departure
 	}
 	if len(r.shapeDistanceTraveledColumn.Read()) > 0 {
 		r.hasShapeDistances = true
