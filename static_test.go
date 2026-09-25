@@ -874,6 +874,104 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
+			desc: "location groups with resolved members",
+			content: newZipBuilder().add(
+				"stops.txt",
+				"stop_id\nstop_id\nstop_2",
+			).add(
+				"location_groups.txt",
+				"location_group_id,location_group_name",
+				"g1,Group One",
+				"g2,",
+			).add(
+				"location_group_stops.txt",
+				"location_group_id,stop_id",
+				"g1,stop_id",
+				"g1,stop_2",
+				"g2,stop_2",
+			).build(),
+			expected: &Static{
+				Stops: []Stop{defaultStop, {Id: "stop_2"}},
+				LocationGroups: []LocationGroup{
+					{Id: "g1", Name: "Group One", Stops: []*Stop{&defaultStop, {Id: "stop_2"}}},
+					{Id: "g2", Stops: []*Stop{{Id: "stop_2"}}},
+				},
+			},
+		},
+		{
+			desc: "location group with unknown stop warns",
+			content: newZipBuilder().add(
+				"stops.txt",
+				"stop_id\nstop_id",
+			).add(
+				"location_groups.txt",
+				"location_group_id\ng1",
+			).add(
+				"location_group_stops.txt",
+				"location_group_id,stop_id",
+				"g1,stop_id",
+				"g1,nope",
+			).build(),
+			expected: &Static{
+				Stops: []Stop{defaultStop},
+				LocationGroups: []LocationGroup{
+					{Id: "g1", Stops: []*Stop{&defaultStop}},
+				},
+				Warnings: []warnings.StaticWarning{
+					{
+						Kind:          warnings.LocationGroupUnknownStop{GroupID: "g1", StopID: "nope"},
+						File:          constants.LocationGroupStopsFile,
+						RowNumber:     2,
+						RowContent:    []string{"g1", "nope"},
+						HeaderContent: []string{"location_group_id", "stop_id"},
+					},
+				},
+			},
+		},
+		{
+			desc: "membership rows for unknown groups are skipped",
+			content: newZipBuilder().add(
+				"stops.txt",
+				"stop_id\nstop_id",
+			).add(
+				"location_group_stops.txt",
+				"location_group_id,stop_id",
+				"missing_group,stop_id",
+			).build(),
+			expected: &Static{
+				Stops: []Stop{defaultStop},
+			},
+		},
+		{
+			desc: "header-only location group files yield nil",
+			content: newZipBuilder().add(
+				"location_groups.txt",
+				"location_group_id,location_group_name",
+			).add(
+				"location_group_stops.txt",
+				"location_group_id,stop_id",
+			).build(),
+			expected: &Static{},
+		},
+		{
+			desc: "location groups file with missing columns",
+			content: newZipBuilder().add(
+				"location_groups.txt",
+				"location_group_name\nGroup",
+			).build(),
+			expected: &Static{
+				Warnings: []warnings.StaticWarning{
+					{
+						Kind:          warnings.MissingColumns{Columns: []string{"location_group_id"}},
+						File:          constants.LocationGroupsFile,
+						RowNumber:     0,
+						RowContent:    []string{"location_group_name"},
+						HeaderContent: []string{"location_group_name"},
+					},
+				},
+			},
+		},
+		{
 			desc: "header-only stops.txt parses to zero stops",
 			content: newZipBuilder().add(
 				"stops.txt", "stop_id,stop_name,stop_lat,stop_lon",
