@@ -1058,7 +1058,8 @@ func (refs stopTimeReferences) resolveBookingRule(column, id string) (*BookingRu
 
 // parsePickupDropOffWindow parses the two window cells of a row. Both empty
 // means "not windowed" (nil pointers, empty reason). Any other invalid
-// combination returns the reason the row must be skipped.
+// combination, including an end before the start, returns the reason the row
+// must be skipped. A zero-length window (start == end) is allowed.
 func parsePickupDropOffWindow(startRaw, endRaw string) (start, end *time.Duration, reason string) {
 	if startRaw == "" && endRaw == "" {
 		return nil, nil, ""
@@ -1070,6 +1071,9 @@ func parsePickupDropOffWindow(startRaw, endRaw string) (start, end *time.Duratio
 	endWindow, endOk := parseGtfsTimeToDuration(endRaw)
 	if !startOk || !endOk {
 		return nil, nil, fmt.Sprintf("unparsable pickup/drop-off window %q-%q", startRaw, endRaw)
+	}
+	if endWindow < startWindow {
+		return nil, nil, fmt.Sprintf("pickup/drop-off window %q-%q ends before it starts", startRaw, endRaw)
 	}
 	return &startWindow, &endWindow, ""
 }

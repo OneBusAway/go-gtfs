@@ -205,6 +205,25 @@ func TestParseStatic_FlexStopTimeValidation(t *testing.T) {
 			wantWarning: warnings.StopTimeInvalidWindow{Reason: `unparsable pickup/drop-off window "soon"-"17:00:00"`},
 		},
 		{
+			desc:        "reversed window",
+			row:         "trip_id,1,,zone_a,,,,17:00:00,08:00:00,2,1,,,",
+			wantWarning: warnings.StopTimeInvalidWindow{Reason: `pickup/drop-off window "17:00:00"-"08:00:00" ends before it starts`},
+		},
+		{
+			desc: "zero-length window",
+			row:  "trip_id,1,,zone_a,,,,08:00:00,08:00:00,2,1,,,",
+			wantStopTimes: []ScheduledStopTime{{
+				Location:                 flexZoneA(),
+				StopSequence:             1,
+				StartPickupDropOffWindow: hhmm(8, 0),
+				EndPickupDropOffWindow:   hhmm(8, 0),
+				PickupType:               PickupDropOffPolicy_PhoneAgency,
+				DropOffType:              PickupDropOffPolicy_No,
+				ContinuousPickup:         PickupDropOffPolicy_No,
+				ContinuousDropOff:        PickupDropOffPolicy_No,
+			}},
+		},
+		{
 			desc:        "location without windows",
 			row:         "trip_id,1,,zone_a,,,,,,2,1,,,",
 			wantWarning: warnings.StopTimeInvalidWindow{Reason: "location_id and location_group_id rows require start/end_pickup_drop_off_window"},
