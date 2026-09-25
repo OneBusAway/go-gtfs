@@ -426,18 +426,16 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 			Optional: true,
 		},
 		{
-			File: "stop_times.txt",
-			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+			File: constants.StopTimesFile,
+			Action: func(file *csv.File) []warnings.StaticWarning {
 				if stream != nil {
-					stream.countStopTimeRows(file, result.Stops, result.Trips)
-					return
+					return stream.countStopTimeRows(file, result)
 				}
 				if opts.StopTimes == StopTimesStopsOnly {
 					parseTripStops(file, result.Stops, result.Trips)
-				} else {
-					parseScheduledStopTimes(file, result.Stops, result.Trips)
+					return nil
 				}
-				return
+				return parseScheduledStopTimes(file, result)
 			},
 			Skip: opts.StopTimes == StopTimesNone,
 		},
@@ -1034,28 +1032,164 @@ func parseScheduledTrips(csv *csv.File, routes []Route, services []Service, shap
 	return trips
 }
 
-func parseScheduledStopTimes(csv *csv.File, stops []Stop, trips []ScheduledTrip) {
-	reader, missing := newStopTimeReader(csv, stops)
-	if missing != nil {
-		fmt.Println(missing)
-		return
+// stopTimeReferences resolves the ids a stop_times.txt row may point at.
+type stopTimeReferences struct {
+	tripIndexes  map[string]int
+	stops        map[string]*Stop
+	locations    map[string]*Location
+	groups       map[string]*LocationGroup
+	bookingRules map[string]*BookingRule
+}
+
+func newStopTimeReferences(static *Static) stopTimeReferences {
+	refs := stopTimeReferences{
+		tripIndexes:  tripIndexByID(static.Trips),
+		stops:        stopsByID(static.Stops),
+		locations:    map[string]*Location{},
+		groups:       map[string]*LocationGroup{},
+		bookingRules: map[string]*BookingRule{},
 	}
-	stopTimesByTrip := readTripRows(csv, reader.tripIDColumn, trips, reader.read)
+	for i := range static.Locations {
+		refs.locations[static.Locations[i].Id] = &static.Locations[i]
+	}
+	for i := range static.LocationGroups {
+		refs.groups[static.LocationGroups[i].Id] = &static.LocationGroups[i]
+	}
+	for i := range static.BookingRules {
+		refs.bookingRules[static.BookingRules[i].Id] = &static.BookingRules[i]
+	}
+	return refs
+}
+
+// stopTimePlace is the exactly-one-of stop / location / location group that a
+// stop_times.txt row serves.
+type stopTimePlace struct {
+	stop     *Stop
+	location *Location
+	group    *LocationGroup
+}
+
+// resolvePlace enforces GTFS's exactly-one-of rule for stop_id, location_id
+// and location_group_id and resolves the one id given. A non-empty reason
+// means the row must be skipped.
+func (refs stopTimeReferences) resolvePlace(stopID, locationID, groupID string) (stopTimePlace, string) {
+	referenced := 0
+	for _, id := range []string{stopID, locationID, groupID} {
+		if id != "" {
+			referenced++
+		}
+	}
+	if referenced != 1 {
+		return stopTimePlace{}, fmt.Sprintf(
+			"row references %d of stop_id, location_id and location_group_id; exactly one is required", referenced)
+	}
+	var place stopTimePlace
+	switch {
+	case stopID != "":
+		place.stop = refs.stops[stopID]
+		if place.stop == nil {
+			return stopTimePlace{}, fmt.Sprintf("unknown stop_id %q", stopID)
+		}
+	case locationID != "":
+		place.location = refs.locations[locationID]
+		if place.location == nil {
+			return stopTimePlace{}, fmt.Sprintf("unknown location_id %q", locationID)
+		}
+	default:
+		place.group = refs.groups[groupID]
+		if place.group == nil {
+			return stopTimePlace{}, fmt.Sprintf("unknown location_group_id %q", groupID)
+		}
+	}
+	return place, ""
+}
+
+// resolveBookingRule resolves an optional booking rule id. A non-empty reason
+// means the id was given but does not exist.
+func (refs stopTimeReferences) resolveBookingRule(column, id string) (*BookingRule, string) {
+	if id == "" {
+		return nil, ""
+	}
+	rule := refs.bookingRules[id]
+	if rule == nil {
+		return nil, fmt.Sprintf("unknown %s %q", column, id)
+	}
+	return rule, ""
+}
+
+// parsePickupDropOffWindow parses the two window cells of a row. Both empty
+// means "not windowed" (nil pointers, empty reason). Any other invalid
+// combination returns the reason the row must be skipped.
+func parsePickupDropOffWindow(startRaw, endRaw string) (start, end *time.Duration, reason string) {
+	if startRaw == "" && endRaw == "" {
+		return nil, nil, ""
+	}
+	if startRaw == "" || endRaw == "" {
+		return nil, nil, "start_pickup_drop_off_window and end_pickup_drop_off_window must be set together"
+	}
+	startWindow, startOk := parseGtfsTimeToDuration(startRaw)
+	endWindow, endOk := parseGtfsTimeToDuration(endRaw)
+	if !startOk || !endOk {
+		return nil, nil, fmt.Sprintf("unparsable pickup/drop-off window %q-%q", startRaw, endRaw)
+	}
+	return &startWindow, &endWindow, ""
+}
+
+// checkWindowUsage applies the GTFS presence rules that tie windows to the
+// kind of place a row references and to arrival/departure times.
+func checkWindowUsage(windowed bool, place stopTimePlace, arrivalRaw, departureRaw string) string {
+	if windowed && (arrivalRaw != "" || departureRaw != "") {
+		return "arrival_time/departure_time are forbidden on a row with a pickup/drop-off window"
+	}
+	if !windowed && place.stop == nil {
+		return "location_id and location_group_id rows require start/end_pickup_drop_off_window"
+	}
+	return ""
+}
+
+// parseArrivalDeparture parses the two time cells, copying whichever is
+// present into the one that is missing.
+func parseArrivalDeparture(arrivalRaw, departureRaw string) (arrival, departure time.Duration) {
+	arrival, arrivalOk := parseGtfsTimeToDuration(arrivalRaw)
+	departure, departureOk := parseGtfsTimeToDuration(departureRaw)
+	if !departureOk {
+		departure = arrival
+	}
+	if !arrivalOk {
+		arrival = departure
+	}
+	return arrival, departure
+}
+
+func parseScheduledStopTimes(csv *csv.File, static *Static) []warnings.StaticWarning {
+	reader, missing := newStopTimeReader(csv, newStopTimeReferences(static))
+	if missing != nil {
+		return []warnings.StaticWarning{
+			warnings.NewStaticWarning(csv, warnings.MissingColumns{Columns: missing}),
+		}
+	}
+	stopTimesByTrip := readTripRows(csv, reader.tripIDColumn, static.Trips, reader.read)
 	for i, stopTimes := range stopTimesByTrip {
 		if len(stopTimes) == 0 {
 			continue
 		}
-		trips[i].StopTimes = finishTripStopTimes(stopTimes, reader.hasShapeDistances)
+		static.Trips[i].StopTimes = finishTripStopTimes(stopTimes, reader.hasShapeDistances)
 	}
+	return reader.warnings
 }
 
 // stopTimeReader builds a ScheduledStopTime from each row of stop_times.txt.
 type stopTimeReader struct {
-	stopIDColumn                csv.RequiredColumn
-	stopSequenceColumn          csv.RequiredColumn
+	file                        *csv.File
 	tripIDColumn                csv.RequiredColumn
+	stopSequenceColumn          csv.RequiredColumn
+	stopIDColumn                csv.OptionalColumn
+	locationIDColumn            csv.OptionalColumn
+	locationGroupIDColumn       csv.OptionalColumn
 	arrivalTimeColumn           csv.OptionalColumn
 	departureTimeColumn         csv.OptionalColumn
+	startWindowColumn           csv.OptionalColumn
+	endWindowColumn             csv.OptionalColumn
 	stopHeadsignColumn          csv.OptionalColumn
 	pickupTypeColumn            csv.OptionalColumn
 	dropOffTypeColumn           csv.OptionalColumn
@@ -1063,24 +1197,36 @@ type stopTimeReader struct {
 	continuousDropOffColumn     csv.OptionalColumn
 	shapeDistanceTraveledColumn csv.OptionalColumn
 	timepointColumn             csv.OptionalColumn
+	pickupBookingRuleIDColumn   csv.OptionalColumn
+	dropOffBookingRuleIDColumn  csv.OptionalColumn
+	safeDurationFactorColumn    csv.OptionalColumn
+	safeDurationOffsetColumn    csv.OptionalColumn
 
-	idToStop  map[string]*Stop
+	refs      stopTimeReferences
 	headsigns stringInterner
 
 	// hasShapeDistances is set once any row read so far has a
 	// shape_dist_traveled value. It picks how a trip's missing times are
 	// interpolated, for the whole feed.
 	hasShapeDistances bool
+	// warnings holds a warning for each row read so far that breaks a
+	// GTFS-Flex rule.
+	warnings []warnings.StaticWarning
 }
 
 // newStopTimeReader returns nil and the names of any missing required columns.
-func newStopTimeReader(f *csv.File, stops []Stop) (*stopTimeReader, []string) {
+func newStopTimeReader(f *csv.File, refs stopTimeReferences) (*stopTimeReader, []string) {
 	reader := &stopTimeReader{
-		stopIDColumn:                f.RequiredColumn("stop_id"),
-		stopSequenceColumn:          f.RequiredColumn("stop_sequence"),
+		file:                        f,
 		tripIDColumn:                f.RequiredColumn("trip_id"),
+		stopSequenceColumn:          f.RequiredColumn("stop_sequence"),
+		stopIDColumn:                f.OptionalColumn("stop_id"),
+		locationIDColumn:            f.OptionalColumn("location_id"),
+		locationGroupIDColumn:       f.OptionalColumn("location_group_id"),
 		arrivalTimeColumn:           f.OptionalColumn("arrival_time"),
 		departureTimeColumn:         f.OptionalColumn("departure_time"),
+		startWindowColumn:           f.OptionalColumn("start_pickup_drop_off_window"),
+		endWindowColumn:             f.OptionalColumn("end_pickup_drop_off_window"),
 		stopHeadsignColumn:          f.OptionalColumn("stop_headsign"),
 		pickupTypeColumn:            f.OptionalColumn("pickup_type"),
 		dropOffTypeColumn:           f.OptionalColumn("drop_off_type"),
@@ -1088,60 +1234,94 @@ func newStopTimeReader(f *csv.File, stops []Stop) (*stopTimeReader, []string) {
 		continuousDropOffColumn:     f.OptionalColumn("continuous_drop_off"),
 		shapeDistanceTraveledColumn: f.OptionalColumn("shape_dist_traveled"),
 		timepointColumn:             f.OptionalColumn("timepoint"),
+		pickupBookingRuleIDColumn:   f.OptionalColumn("pickup_booking_rule_id"),
+		dropOffBookingRuleIDColumn:  f.OptionalColumn("drop_off_booking_rule_id"),
+		safeDurationFactorColumn:    f.OptionalColumn("safe_duration_factor"),
+		safeDurationOffsetColumn:    f.OptionalColumn("safe_duration_offset"),
 	}
 	if missing := f.MissingRequiredColumns(); missing != nil {
 		return nil, missing
 	}
-	reader.idToStop = stopsByID(stops)
+	reader.refs = refs
 	reader.headsigns = stringInterner{}
 	return reader, nil
 }
 
-// newStopTimeReaderForStops is newStopTimeReader with the stop lookup already
-// built.
-func newStopTimeReaderForStops(f *csv.File, idToStop map[string]*Stop) (*stopTimeReader, []string) {
-	reader, missing := newStopTimeReader(f, nil)
-	if missing != nil {
-		return nil, missing
-	}
-	reader.idToStop = idToStop
-	return reader, nil
-}
-
 // read builds the stop time in the current row. It reports false for a row
-// with an invalid stop sequence or an unknown stop.
+// with an invalid stop sequence or an unknown trip, and, with a warning, for a
+// row that breaks a GTFS-Flex rule.
 func (r *stopTimeReader) read() (ScheduledStopTime, bool) {
-	arrival, arrivalOk := parseGtfsTimeToDuration(r.arrivalTimeColumn.Read())
-	departure, departureOk := parseGtfsTimeToDuration(r.departureTimeColumn.Read())
-
-	if !departureOk {
-		departure = arrival
-	}
-	if !arrivalOk {
-		arrival = departure
-	}
-	if len(r.shapeDistanceTraveledColumn.Read()) > 0 {
-		r.hasShapeDistances = true
-	}
-	stopSequence, err := strconv.Atoi(r.stopSequenceColumn.Read())
+	tripID := r.tripIDColumn.Read()
+	rawStopSequence := r.stopSequenceColumn.Read()
+	stopSequence, err := strconv.Atoi(rawStopSequence)
 	if err != nil {
-		// TODO: log a warning
+		log.Printf("Skipping stop time because stop_sequence %q is not an integer", rawStopSequence)
 		return ScheduledStopTime{}, false
 	}
+	if _, ok := r.refs.tripIndexes[tripID]; !ok {
+		log.Printf("Skipping stop time because trip %q is unknown", tripID)
+		return ScheduledStopTime{}, false
+	}
+
+	place, reason := r.refs.resolvePlace(r.stopIDColumn.Read(), r.locationIDColumn.Read(), r.locationGroupIDColumn.Read())
+	if reason != "" {
+		r.warn(warnings.StopTimeInvalidReference{Reason: reason})
+		return ScheduledStopTime{}, false
+	}
+	startWindow, endWindow, reason := parsePickupDropOffWindow(r.startWindowColumn.Read(), r.endWindowColumn.Read())
+	if reason != "" {
+		r.warn(warnings.StopTimeInvalidWindow{Reason: reason})
+		return ScheduledStopTime{}, false
+	}
+	windowed := startWindow != nil
+	arrivalRaw := r.arrivalTimeColumn.Read()
+	departureRaw := r.departureTimeColumn.Read()
+	if reason := checkWindowUsage(windowed, place, arrivalRaw, departureRaw); reason != "" {
+		r.warn(warnings.StopTimeInvalidWindow{Reason: reason})
+		return ScheduledStopTime{}, false
+	}
+	pickupRule, reason := r.refs.resolveBookingRule("pickup_booking_rule_id", r.pickupBookingRuleIDColumn.Read())
+	if reason != "" {
+		r.warn(warnings.StopTimeInvalidReference{Reason: reason})
+		return ScheduledStopTime{}, false
+	}
+	dropOffRule, reason := r.refs.resolveBookingRule("drop_off_booking_rule_id", r.dropOffBookingRuleIDColumn.Read())
+	if reason != "" {
+		r.warn(warnings.StopTimeInvalidReference{Reason: reason})
+		return ScheduledStopTime{}, false
+	}
+
+	arrival, departure := parseArrivalDeparture(arrivalRaw, departureRaw)
+	if r.shapeDistanceTraveledColumn.Read() != "" {
+		r.hasShapeDistances = true
+	}
 	stopTime := ScheduledStopTime{
-		Stop:                  r.idToStop[r.stopIDColumn.Read()],
+		Stop:                  place.stop,
+		Location:              place.location,
+		LocationGroup:         place.group,
 		Headsign:              r.headsigns.intern(r.stopHeadsignColumn.Read()),
 		ArrivalTime:           arrival,
-		StopSequence:          stopSequence,
 		DepartureTime:         departure,
+		StopSequence:          stopSequence,
 		PickupType:            parsePickupDropOffPolicyOrYes(r.pickupTypeColumn.Read()),
 		DropOffType:           parsePickupDropOffPolicyOrYes(r.dropOffTypeColumn.Read()),
 		ContinuousPickup:      parsePickupDropOffPolicy(r.continuousPickupColumn.ReadOr("")),
 		ContinuousDropOff:     parsePickupDropOffPolicy(r.continuousDropOffColumn.ReadOr("")),
 		ShapeDistanceTraveled: parseFloat64(r.shapeDistanceTraveledColumn.Read()),
-		ExactTimes:            r.timepointColumn.ReadOr("1") != "0",
+		// A windowed record has no exact time whatever timepoint says.
+		ExactTimes:               !windowed && r.timepointColumn.ReadOr("1") != "0",
+		StartPickupDropOffWindow: startWindow,
+		EndPickupDropOffWindow:   endWindow,
+		PickupBookingRule:        pickupRule,
+		DropOffBookingRule:       dropOffRule,
+		SafeDurationFactor:       parseFloat64(r.safeDurationFactorColumn.Read()),
+		SafeDurationOffset:       parseFloat64(r.safeDurationOffsetColumn.Read()),
 	}
-	return stopTime, stopTime.Stop != nil
+	return stopTime, true
+}
+
+func (r *stopTimeReader) warn(kind warnings.StaticWarningKind) {
+	r.warnings = append(r.warnings, warnings.NewStaticWarning(r.file, kind))
 }
 
 // finishTripStopTimes orders one trip's stop times by stop_sequence and fills
@@ -1152,10 +1332,7 @@ func finishTripStopTimes(stopTimes []ScheduledStopTime, hasShapeDistances bool) 
 	sort.Slice(stopTimes, func(a, b int) bool {
 		return stopTimes[a].StopSequence < stopTimes[b].StopSequence
 	})
-	if hasShapeDistances {
-		return interpolateStopTimesByShapeDist(stopTimes)
-	}
-	return interpolateStopTimes(stopTimes)
+	return interpolateTimedStopTimes(stopTimes, hasShapeDistances)
 }
 
 type stopVisit struct {
