@@ -142,7 +142,7 @@ type ScheduledTrip struct {
 
 type ScheduledStopTime struct {
 	Trip                  *ScheduledTrip
-	Stop                  *Stop
+	Stop                  *Stop // nil on GTFS-Flex rows that reference a Location or LocationGroup
 	ArrivalTime           time.Duration
 	DepartureTime         time.Duration
 	StopSequence          int
@@ -153,6 +153,29 @@ type ScheduledStopTime struct {
 	ContinuousDropOff     PickupDropOffPolicy
 	ShapeDistanceTraveled *float64
 	ExactTimes            bool
+
+	// GTFS-Flex. Exactly one of Stop, Location and LocationGroup is set.
+	Location                 *Location
+	LocationGroup            *LocationGroup
+	StartPickupDropOffWindow *time.Duration
+	EndPickupDropOffWindow   *time.Duration
+	PickupBookingRule        *BookingRule
+	DropOffBookingRule       *BookingRule
+	// Draft-era placement tolerated for real feeds; the adopted spec puts
+	// these on trips.txt (see ScheduledTrip).
+	SafeDurationFactor *float64
+	SafeDurationOffset *float64
+}
+
+// IsWindowed reports whether the record carries a pickup/drop-off window
+// instead of arrival/departure times.
+func (st ScheduledStopTime) IsWindowed() bool {
+	return st.StartPickupDropOffWindow != nil && st.EndPickupDropOffWindow != nil
+}
+
+// IsFlex reports whether the record is an on-demand (GTFS-Flex) record.
+func (st ScheduledStopTime) IsFlex() bool {
+	return st.IsWindowed() || st.Location != nil || st.LocationGroup != nil
 }
 
 type ShapePoint struct {

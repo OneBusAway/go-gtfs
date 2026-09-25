@@ -133,3 +133,52 @@ func setTime(stop *ScheduledStopTime, tType int, t time.Duration) {
 		stop.DepartureTime = t
 	}
 }
+
+// interpolateTimedStopTimes fills in missing arrival/departure times on the
+// timed records of a trip. Windowed records legitimately carry no times, so
+// they are removed from the interpolation input (not merely skipped when
+// writing) and put back in stop_sequence order afterwards. stopTimes must
+// already be sorted by StopSequence.
+func interpolateTimedStopTimes(stopTimes []ScheduledStopTime, byShapeDist bool) []ScheduledStopTime {
+	if len(stopTimes) == 0 {
+		return nil
+	}
+	var timed, windowed []ScheduledStopTime
+	for _, stopTime := range stopTimes {
+		if stopTime.IsWindowed() {
+			windowed = append(windowed, stopTime)
+		} else {
+			timed = append(timed, stopTime)
+		}
+	}
+	if len(timed) == 0 {
+		return stopTimes
+	}
+	if byShapeDist {
+		timed = interpolateStopTimesByShapeDist(timed)
+	} else {
+		timed = interpolateStopTimes(timed)
+	}
+	if len(windowed) == 0 {
+		return timed
+	}
+	return mergeByStopSequence(timed, windowed)
+}
+
+// mergeByStopSequence merges two StopSequence-sorted slices into one.
+func mergeByStopSequence(a, b []ScheduledStopTime) []ScheduledStopTime {
+	merged := make([]ScheduledStopTime, 0, len(a)+len(b))
+	i, j := 0, 0
+	for i < len(a) && j < len(b) {
+		if a[i].StopSequence <= b[j].StopSequence {
+			merged = append(merged, a[i])
+			i++
+		} else {
+			merged = append(merged, b[j])
+			j++
+		}
+	}
+	merged = append(merged, a[i:]...)
+	merged = append(merged, b[j:]...)
+	return merged
+}
