@@ -96,8 +96,6 @@ func hhmm(h, m int) *time.Duration {
 }
 
 func TestParseStatic_FlexStopTimeValidation(t *testing.T) {
-	// Every case has a single stop_times row so that the warning's RowContent
-	// (which csv.File reuses across rows) is stable.
 	for _, tc := range []struct {
 		desc          string
 		row           string
