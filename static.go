@@ -320,11 +320,11 @@ func ParseStatic(content []byte, opts ParseStaticOptions) (*Static, error) {
 			table.PostProcess = func() {}
 		}
 		zipFile := fileNameToFile[table.File]
+		if table.Optional && isAbsentOrEmpty(zipFile) {
+			table.PostProcess()
+			continue
+		}
 		if zipFile == nil {
-			if table.Optional {
-				table.PostProcess()
-				continue
-			}
 			return nil, fmt.Errorf("no %q file in GTFS static feed", table.File)
 		}
 		file, err := openCsvFile(table.File, zipFile)
@@ -351,6 +351,12 @@ func openCsvFile(file constants.StaticFile, zipFile *zip.File) (*csv.File, error
 		return nil, err
 	}
 	return f, nil
+}
+
+// isAbsentOrEmpty reports whether an optional feed file should be treated as
+// not provided. A zero-byte file has no header row and is meaningless.
+func isAbsentOrEmpty(zipFile *zip.File) bool {
+	return zipFile == nil || zipFile.UncompressedSize64 == 0
 }
 
 func parseAgencies(csv *csv.File) ([]Agency, []warnings.StaticWarning) {

@@ -1196,6 +1196,15 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
+			// csv.New rejects a file with no header row; an empty optional file
+			// must be treated as absent rather than aborting the whole parse.
+			desc: "zero-byte optional file is treated as absent",
+			content: newZipBuilder().add(
+				"frequencies.txt", "",
+			).build(),
+			expected: &Static{},
+		},
+		{
 			desc: "frequencies",
 			content: newZipBuilderWithDefaults().add(
 				"frequencies.txt",
