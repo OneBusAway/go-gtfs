@@ -30,6 +30,8 @@ type Static struct {
 
 	// Locations is nil when locations.geojson is absent.
 	Locations []Location
+	// LocationGroups is nil when location_groups.txt is absent.
+	LocationGroups []LocationGroup
 	// BookingRules is nil when booking_rules.txt is absent.
 	BookingRules []BookingRule
 
@@ -190,6 +192,14 @@ type BookingRule struct {
 	BookingUrl             string
 }
 
+// LocationGroup corresponds to a single row in the location_groups.txt file
+// with its location_group_stops.txt members resolved.
+type LocationGroup struct {
+	Id    string
+	Name  string
+	Stops []*Stop // resolved members; unknown stop ids are skipped with a warning
+}
+
 type ParseStaticOptions struct {
 	// If true, wheelchair boarding information is inherited from parent station
 	// when unspecified for a child stop/platform, entrance, or exit.
@@ -250,6 +260,21 @@ func ParseStatic(content []byte, opts ParseStaticOptions) (*Static, error) {
 			},
 			// GTFS makes stops.txt optional when locations.geojson defines zones.
 			Optional: locationsPresent,
+		},
+		{
+			File: constants.LocationGroupsFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				result.LocationGroups, w = parseLocationGroups(file)
+				return
+			},
+			Optional: true,
+		},
+		{
+			File: constants.LocationGroupStopsFile,
+			Action: func(file *csv.File) []warnings.StaticWarning {
+				return parseLocationGroupStops(file, result.LocationGroups, result.Stops)
+			},
+			Optional: true,
 		},
 		{
 			File: "calendar.txt",
@@ -586,6 +611,72 @@ func parseStops(csv *csv.File, inheritWheelchairBoarding bool) []Stop {
 	}
 
 	return stops
+}
+
+func parseLocationGroups(csv *csv.File) ([]LocationGroup, []warnings.StaticWarning) {
+	idColumn := csv.RequiredColumn("location_group_id")
+	nameColumn := csv.OptionalColumn("location_group_name")
+
+	if w := checkForMissingColumns(csv); len(w) > 0 {
+		return nil, w
+	}
+
+	var groups []LocationGroup
+	for csv.NextRow() {
+		id := idColumn.Read()
+		if missingKeys := csv.MissingRowKeys(); len(missingKeys) > 0 {
+			log.Printf("Skipping location group because of missing keys %s", missingKeys)
+			continue
+		}
+		groups = append(groups, LocationGroup{Id: id, Name: nameColumn.Read()})
+	}
+	return groups, nil
+}
+
+// parseLocationGroupStops appends each row's stop to its group's Stops. A row
+// naming an unknown group is logged and skipped (matching how transfers.txt
+// handles dangling ids); a row naming an unknown stop raises a warning.
+func parseLocationGroupStops(csv *csv.File, groups []LocationGroup, stops []Stop) []warnings.StaticWarning {
+	groupIDColumn := csv.RequiredColumn("location_group_id")
+	stopIDColumn := csv.RequiredColumn("stop_id")
+
+	if w := checkForMissingColumns(csv); len(w) > 0 {
+		return w
+	}
+
+	idToGroup := map[string]*LocationGroup{}
+	for i := range groups {
+		idToGroup[groups[i].Id] = &groups[i]
+	}
+	idToStop := map[string]*Stop{}
+	for i := range stops {
+		idToStop[stops[i].Id] = &stops[i]
+	}
+
+	var w []warnings.StaticWarning
+	for csv.NextRow() {
+		groupID := groupIDColumn.Read()
+		stopID := stopIDColumn.Read()
+		if missingKeys := csv.MissingRowKeys(); len(missingKeys) > 0 {
+			log.Printf("Skipping location group stop because of missing keys %s", missingKeys)
+			continue
+		}
+		group := idToGroup[groupID]
+		if group == nil {
+			log.Printf("Skipping location group stop because location group %q is unknown", groupID)
+			continue
+		}
+		stop := idToStop[stopID]
+		if stop == nil {
+			w = append(w, warnings.NewStaticWarning(csv, warnings.LocationGroupUnknownStop{
+				GroupID: groupID,
+				StopID:  stopID,
+			}))
+			continue
+		}
+		group.Stops = append(group.Stops, stop)
+	}
+	return w
 }
 
 func parseFloat64(s string) *float64 {
