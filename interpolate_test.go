@@ -4,6 +4,8 @@ import (
 	"math"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 // Simple helper: parse "08:00:00" to time.Duration
@@ -280,5 +282,52 @@ func TestInterpolateTimedStopTimes_AllWindowedIsUnchanged(t *testing.T) {
 func TestInterpolateTimedStopTimes_EmptyIsNil(t *testing.T) {
 	if got := interpolateTimedStopTimes(nil, false); got != nil {
 		t.Errorf("got %v, want nil so cmp.Diff on Static keeps matching", got)
+	}
+}
+
+func TestInterpolateTimedStopTimes_AllTimedMatchesInterpolator(t *testing.T) {
+	newTrip := func() []ScheduledStopTime {
+		return []ScheduledStopTime{
+			{StopSequence: 1, ArrivalTime: dur("08:00:00"), DepartureTime: dur("08:00:00"), ShapeDistanceTraveled: ptr(0.0)},
+			{StopSequence: 2, ShapeDistanceTraveled: ptr(2.5)},
+			{StopSequence: 3, ShapeDistanceTraveled: ptr(5.0)},
+			{StopSequence: 4, ArrivalTime: dur("08:40:00"), DepartureTime: dur("08:40:00"), ShapeDistanceTraveled: ptr(10.0)},
+		}
+	}
+	for _, tc := range []struct {
+		desc         string
+		byShapeDist  bool
+		interpolator func([]ScheduledStopTime) []ScheduledStopTime
+	}{
+		{desc: "even", byShapeDist: false, interpolator: interpolateStopTimes},
+		{desc: "by shape distance", byShapeDist: true, interpolator: interpolateStopTimesByShapeDist},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			input := newTrip()
+			got := interpolateTimedStopTimes(input, tc.byShapeDist)
+			if diff := cmp.Diff(got, tc.interpolator(newTrip())); diff != "" {
+				t.Errorf("interpolateTimedStopTimes mismatch (-got +want):\n%s", diff)
+			}
+			if diff := cmp.Diff(input, newTrip()); diff != "" {
+				t.Errorf("input was mutated (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestInterpolateTimedStopTimes_AllTimedCopiesOnce(t *testing.T) {
+	st := []ScheduledStopTime{
+		{StopSequence: 1, ArrivalTime: dur("08:00:00"), DepartureTime: dur("08:00:00")},
+		{StopSequence: 2},
+		{StopSequence: 3},
+		{StopSequence: 4, ArrivalTime: dur("08:40:00"), DepartureTime: dur("08:40:00")},
+	}
+	// interpolateStopTimes makes the single result copy; partitioning an
+	// all-timed trip must not add a second one.
+	allocs := testing.AllocsPerRun(100, func() {
+		interpolateTimedStopTimes(st, false)
+	})
+	if allocs != 1 {
+		t.Errorf("got %v allocations per call, want 1", allocs)
 	}
 }

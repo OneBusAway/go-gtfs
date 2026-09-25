@@ -143,7 +143,17 @@ func interpolateTimedStopTimes(stopTimes []ScheduledStopTime, byShapeDist bool) 
 	if len(stopTimes) == 0 {
 		return nil
 	}
-	var timed, windowed []ScheduledStopTime
+	interpolate := interpolateStopTimes
+	if byShapeDist {
+		interpolate = interpolateStopTimesByShapeDist
+	}
+	// Most trips have no windowed records; the interpolator already copies
+	// its input, so partitioning them would only add a second copy.
+	if !hasWindowedStopTime(stopTimes) {
+		return interpolate(stopTimes)
+	}
+	timed := make([]ScheduledStopTime, 0, len(stopTimes))
+	windowed := make([]ScheduledStopTime, 0, len(stopTimes))
 	for _, stopTime := range stopTimes {
 		if stopTime.IsWindowed() {
 			windowed = append(windowed, stopTime)
@@ -154,15 +164,18 @@ func interpolateTimedStopTimes(stopTimes []ScheduledStopTime, byShapeDist bool) 
 	if len(timed) == 0 {
 		return stopTimes
 	}
-	if byShapeDist {
-		timed = interpolateStopTimesByShapeDist(timed)
-	} else {
-		timed = interpolateStopTimes(timed)
+	return mergeByStopSequence(interpolate(timed), windowed)
+}
+
+// hasWindowedStopTime reports whether any record carries a pickup/drop-off
+// window.
+func hasWindowedStopTime(stopTimes []ScheduledStopTime) bool {
+	for i := range stopTimes {
+		if stopTimes[i].IsWindowed() {
+			return true
+		}
 	}
-	if len(windowed) == 0 {
-		return timed
-	}
-	return mergeByStopSequence(timed, windowed)
+	return false
 }
 
 // mergeByStopSequence merges two StopSequence-sorted slices into one.
