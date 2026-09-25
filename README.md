@@ -97,9 +97,9 @@ earlier versions should note:
   leaves these rows alone.
 - Code that expects fixed-stop, fixed-time service should skip flex rows with
   `IsFlex()`, or only windowed rows with `IsWindowed()`.
-- A `stop_times.txt` row whose `stop_id` is not in `stops.txt` is now skipped with a
-  `StopTimeInvalidReference` warning in `Static.Warnings`. Earlier versions kept the
-  row with a nil `Stop`.
+- A `stop_times.txt` row whose `stop_id` is not in `stops.txt` is still skipped, but it
+  now produces a `StopTimeInvalidReference` warning in `Static.Warnings`. Earlier
+  versions dropped such rows silently.
 
 ## Performance
 
