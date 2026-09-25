@@ -1533,3 +1533,26 @@ func TestParseStatic_ContinuousPickupDropOffDefaultToNo(t *testing.T) {
 		})
 	}
 }
+
+func TestParseStatic_UnknownTripIDIsSkipped(t *testing.T) {
+	// The second row switches to a trip_id that trips.txt does not define.
+	// Before the fix this dereferenced a nil *ScheduledTrip while presizing
+	// its StopTimes slice.
+	content := newZipBuilderWithDefaults().add(
+		"stop_times.txt",
+		"stop_id,trip_id,stop_sequence",
+		"stop_id,trip_id,1",
+		"stop_id,ghost,2",
+	).build()
+
+	static, err := ParseStatic(content, ParseStaticOptions{})
+	if err != nil {
+		t.Fatalf("ParseStatic() got error %v, want nil", err)
+	}
+	if len(static.Trips) != 1 {
+		t.Fatalf("got %d trips, want 1", len(static.Trips))
+	}
+	if got := len(static.Trips[0].StopTimes); got != 1 {
+		t.Errorf("got %d stop times on trip_id, want 1 (the ghost row must be dropped)", got)
+	}
+}

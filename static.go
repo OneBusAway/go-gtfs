@@ -793,7 +793,6 @@ func parseScheduledStopTimes(csv *csv.File, stops []Stop, trips []ScheduledTrip)
 		idToTrip[trips[i].ID] = &trips[i]
 	}
 	var currentTrip *ScheduledTrip
-	var currentTripID string
 	var hasNonEmptyShapeDistRow = false
 	for csv.NextRow() {
 		arrival, arrivalOk := parseGtfsTimeToDuration(arrivalTimeColumn.Read())
@@ -827,14 +826,6 @@ func parseScheduledStopTimes(csv *csv.File, stops []Stop, trips []ScheduledTrip)
 			ExactTimes:            timepointColumn.ReadOr("1") != "0",
 		}
 		tripID := tripIDColumn.Read()
-		if currentTrip == nil || currentTripID != tripID {
-			thisTrip := idToTrip[tripID]
-			if currentTrip != nil && cap(thisTrip.StopTimes) == 0 {
-				thisTrip.StopTimes = make([]ScheduledStopTime, 0, len(currentTrip.StopTimes))
-			}
-			currentTrip = thisTrip
-			currentTripID = tripID
-		}
 		if missingKeys := csv.MissingRowKeys(); len(missingKeys) > 0 {
 			log.Printf("Skipping stop time because of missing keys %s", missingKeys)
 			continue
@@ -842,10 +833,20 @@ func parseScheduledStopTimes(csv *csv.File, stops []Stop, trips []ScheduledTrip)
 		if stopTime.Stop == nil {
 			continue
 		}
-		if currentTrip == nil {
+		trip := idToTrip[tripID]
+		if trip == nil {
+			log.Printf("Skipping stop time because trip %q is unknown", tripID)
 			continue
 		}
-		currentTrip.StopTimes = append(currentTrip.StopTimes, stopTime)
+		if trip != currentTrip {
+			// Presize the new trip's slice from the previous trip's length; trips
+			// on the same route usually have similar stop counts.
+			if currentTrip != nil && cap(trip.StopTimes) == 0 {
+				trip.StopTimes = make([]ScheduledStopTime, 0, len(currentTrip.StopTimes))
+			}
+			currentTrip = trip
+		}
+		trip.StopTimes = append(trip.StopTimes, stopTime)
 	}
 	for _, trip := range idToTrip {
 		sort.Slice(trip.StopTimes, func(i, j int) bool {
