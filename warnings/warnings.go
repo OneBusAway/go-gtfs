@@ -30,9 +30,20 @@ func NewStaticWarning(csvFile *csv.File, kind StaticWarningKind) StaticWarning {
 		Kind:          kind,
 		File:          csvFile.Name(),
 		RowNumber:     csvFile.RowNumber(),
-		RowContent:    csvFile.RowContent(),
+		RowContent:    copyRow(csvFile.RowContent()),
 		HeaderContent: csvFile.HeaderContent(),
 	}
+}
+
+// copyRow detaches a row from the csv.File, which reuses its row storage
+// when it reads the next row.
+func copyRow(row []string) []string {
+	if row == nil {
+		return nil
+	}
+	copied := make([]string, len(row))
+	copy(copied, row)
+	return copied
 }
 
 // NewFileWarning builds a warning for a file that is not CSV, such as

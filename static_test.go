@@ -2090,6 +2090,34 @@ func TestParseStatic_UnknownTripIDIsSkipped(t *testing.T) {
 	}
 }
 
+func TestParseStatic_WarningRowContentSurvivesLaterRows(t *testing.T) {
+	// csv.File reuses its row storage, so a warning raised on a row that is
+	// not the last one in its file must hold its own copy of the row.
+	content := newZipBuilder().add(
+		"stops.txt",
+		"stop_id\nstop_id",
+	).add(
+		"location_groups.txt",
+		"location_group_id\ng1",
+	).add(
+		"location_group_stops.txt",
+		"location_group_id,stop_id",
+		"g1,nope",
+		"g1,stop_id",
+	).build()
+
+	static, err := ParseStatic(content, ParseStaticOptions{})
+	if err != nil {
+		t.Fatalf("ParseStatic() got error %v, want nil", err)
+	}
+	if len(static.Warnings) != 1 {
+		t.Fatalf("got warnings %+v, want exactly one", static.Warnings)
+	}
+	if diff := cmp.Diff(static.Warnings[0].RowContent, []string{"g1", "nope"}); diff != "" {
+		t.Errorf("RowContent mismatch (-got +want):\n%s", diff)
+	}
+}
+
 func TestParseStatic_StopsFileRequiredWithoutLocations(t *testing.T) {
 	content := newZipBuilder().remove("stops.txt").build()
 
