@@ -83,6 +83,24 @@ Below is a list of the GTFS schedule files and whether they are currently suppor
 | [feed_info.txt](https://gtfs.org/documentation/schedule/reference/#feed_infotxt)                       | ❌        | Conditionally Required  |                                                             |
 | [attributions.txt](https://gtfs.org/documentation/schedule/reference/#attributionstxt)                 | ❌        | Optional                |                                                             |
 
+## GTFS-Flex and upgrading
+
+Feeds that use [GTFS-Flex](https://gtfs.org/community/extensions/flex/) now parse into
+`Static.Locations`, `Static.LocationGroups` and `Static.BookingRules`, and their
+`stop_times.txt` rows appear on trips alongside ordinary ones. Code written against
+earlier versions should note:
+
+- `ScheduledStopTime.Stop` may be nil. A flex row references a `Location` or a
+  `LocationGroup` instead; exactly one of `Stop`, `Location` and `LocationGroup` is set.
+- A windowed row (one with `StartPickupDropOffWindow`/`EndPickupDropOffWindow`) has
+  zero `ArrivalTime` and `DepartureTime` and `ExactTimes == false`. Interpolation
+  leaves these rows alone.
+- Code that expects fixed-stop, fixed-time service should skip flex rows with
+  `IsFlex()`, or only windowed rows with `IsWindowed()`.
+- A `stop_times.txt` row whose `stop_id` is not in `stops.txt` is now skipped with a
+  `StopTimeInvalidReference` warning in `Static.Warnings`. Earlier versions kept the
+  row with a nil `Stop`.
+
 ## Performance
 
 The package is designed to be about as fast as possible without resorting to unreadable code.
