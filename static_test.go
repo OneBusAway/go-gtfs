@@ -823,6 +823,61 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
+			desc: "locations.geojson degenerate exterior rings warn",
+			content: newZipBuilder().add(
+				"locations.geojson",
+				`{"type":"FeatureCollection","features":[`+
+					`{"type":"Feature","id":"empty_ring","properties":{},`+
+					`"geometry":{"type":"Polygon","coordinates":[[]]}},`+
+					`{"type":"Feature","id":"empty_multi_ring","properties":{},`+
+					`"geometry":{"type":"MultiPolygon","coordinates":[[[]]]}},`+
+					`{"type":"Feature","id":"two_points","properties":{},`+
+					`"geometry":{"type":"Polygon","coordinates":[[[0,0],[1,1]]]}}]}`,
+			).build(),
+			expected: &Static{
+				Warnings: []warnings.StaticWarning{
+					warnings.NewFileWarning(constants.LocationsGeoJSONFile, warnings.LocationInvalidGeometry{
+						LocationID: "empty_ring",
+						Reason:     "exterior ring has 0 positions; at least 4 are required",
+					}),
+					warnings.NewFileWarning(constants.LocationsGeoJSONFile, warnings.LocationInvalidGeometry{
+						LocationID: "empty_multi_ring",
+						Reason:     "exterior ring has 0 positions; at least 4 are required",
+					}),
+					warnings.NewFileWarning(constants.LocationsGeoJSONFile, warnings.LocationInvalidGeometry{
+						LocationID: "two_points",
+						Reason:     "exterior ring has 2 positions; at least 4 are required",
+					}),
+				},
+			},
+		},
+		{
+			desc: "locations.geojson degenerate hole is dropped with a warning",
+			content: newZipBuilder().add(
+				"locations.geojson",
+				`{"type":"FeatureCollection","features":[{"type":"Feature","id":"holed","properties":{},`+
+					`"geometry":{"type":"Polygon","coordinates":[[[0,0],[4,0],[4,4],[0,0]],[[1,1],[2,2]]]}}]}`,
+			).build(),
+			expected: &Static{
+				Locations: []Location{
+					{
+						Id: "holed",
+						Geometry: LocationGeometry{
+							Type:     "Polygon",
+							Polygons: [][][][2]float64{{{{0, 0}, {4, 0}, {4, 4}, {0, 0}}}},
+							Raw:      json.RawMessage(`{"type":"Polygon","coordinates":[[[0,0],[4,0],[4,4],[0,0]],[[1,1],[2,2]]]}`),
+						},
+					},
+				},
+				Warnings: []warnings.StaticWarning{
+					warnings.NewFileWarning(constants.LocationsGeoJSONFile, warnings.LocationInvalidGeometry{
+						LocationID: "holed",
+						Reason:     "dropped hole with 2 positions; at least 4 are required",
+					}),
+				},
+			},
+		},
+		{
 			desc: "locations.geojson feature without id warns",
 			content: newZipBuilder().add(
 				"locations.geojson",

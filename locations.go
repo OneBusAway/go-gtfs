@@ -68,13 +68,19 @@ func parseLocations(content []byte) ([]Location, []warnings.StaticWarning, error
 			}))
 			continue
 		}
-		geometry, err := parseLocationGeometry(feature.Geometry)
+		geometry, droppedHoles, err := parseLocationGeometry(feature.Geometry)
 		if err != nil {
 			w = append(w, warnings.NewFileWarning(constants.LocationsGeoJSONFile, warnings.LocationInvalidGeometry{
 				LocationID: id,
 				Reason:     err.Error(),
 			}))
 			continue
+		}
+		for _, reason := range droppedHoles {
+			w = append(w, warnings.NewFileWarning(constants.LocationsGeoJSONFile, warnings.LocationInvalidGeometry{
+				LocationID: id,
+				Reason:     reason,
+			}))
 		}
 		locations = append(locations, Location{
 			Id:          id,
@@ -120,63 +126,88 @@ func jsonScalarString(raw json.RawMessage) string {
 	return ""
 }
 
+// minRingPositions is the RFC 7946 §3.1.6 minimum for a linear ring: three
+// distinct positions plus the closing repeat of the first.
+const minRingPositions = 4
+
 // parseLocationGeometry decodes a Polygon or MultiPolygon geometry object.
-func parseLocationGeometry(raw json.RawMessage) (LocationGeometry, error) {
+// droppedHoles holds one reason per degenerate hole that was discarded while
+// keeping the rest of the geometry.
+func parseLocationGeometry(raw json.RawMessage) (geometry LocationGeometry, droppedHoles []string, err error) {
 	if len(raw) == 0 {
-		return LocationGeometry{}, fmt.Errorf("feature has no geometry")
+		return LocationGeometry{}, nil, fmt.Errorf("feature has no geometry")
 	}
-	var geometry geoJSONGeometry
-	if err := json.Unmarshal(raw, &geometry); err != nil {
-		return LocationGeometry{}, err
+	var decoded geoJSONGeometry
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return LocationGeometry{}, nil, err
 	}
 	var polygons [][][][]float64
-	switch geometry.Type {
+	switch decoded.Type {
 	case "":
 		// `"geometry": null` decodes to the zero value.
-		return LocationGeometry{}, fmt.Errorf("feature has no geometry")
+		return LocationGeometry{}, nil, fmt.Errorf("feature has no geometry")
 	case "Polygon":
 		var rings [][][]float64
-		if err := json.Unmarshal(geometry.Coordinates, &rings); err != nil {
-			return LocationGeometry{}, err
+		if err := json.Unmarshal(decoded.Coordinates, &rings); err != nil {
+			return LocationGeometry{}, nil, err
 		}
 		polygons = [][][][]float64{rings}
 	case "MultiPolygon":
-		if err := json.Unmarshal(geometry.Coordinates, &polygons); err != nil {
-			return LocationGeometry{}, err
+		if err := json.Unmarshal(decoded.Coordinates, &polygons); err != nil {
+			return LocationGeometry{}, nil, err
 		}
 	default:
-		return LocationGeometry{}, fmt.Errorf("unsupported geometry type %q", geometry.Type)
+		return LocationGeometry{}, nil, fmt.Errorf("unsupported geometry type %q", decoded.Type)
 	}
-	normalised, err := normalisePolygons(polygons)
+	normalised, droppedHoles, err := normalisePolygons(polygons)
 	if err != nil {
-		return LocationGeometry{}, err
+		return LocationGeometry{}, nil, err
 	}
-	return LocationGeometry{Type: geometry.Type, Polygons: normalised, Raw: raw}, nil
+	return LocationGeometry{Type: decoded.Type, Polygons: normalised, Raw: raw}, droppedHoles, nil
 }
 
 // normalisePolygons truncates every position to [lon, lat] (RFC 7946 allows a
-// third altitude element) and rejects empty polygons.
-func normalisePolygons(polygons [][][][]float64) ([][][][2]float64, error) {
+// third altitude element). An empty polygon or an exterior ring too short to
+// enclose an area is an error. A hole that is too short is dropped and its
+// reason returned, because the exterior ring alone is still a usable zone.
+func normalisePolygons(polygons [][][][]float64) ([][][][2]float64, []string, error) {
 	if len(polygons) == 0 {
-		return nil, fmt.Errorf("geometry has no polygons")
+		return nil, nil, fmt.Errorf("geometry has no polygons")
 	}
 	result := make([][][][2]float64, 0, len(polygons))
+	var droppedHoles []string
 	for _, rings := range polygons {
 		if len(rings) == 0 {
-			return nil, fmt.Errorf("polygon has no rings")
+			return nil, nil, fmt.Errorf("polygon has no rings")
+		}
+		if len(rings[0]) < minRingPositions {
+			return nil, nil, fmt.Errorf("exterior ring has %d positions; at least %d are required", len(rings[0]), minRingPositions)
 		}
 		polygon := make([][][2]float64, 0, len(rings))
-		for _, ring := range rings {
-			points := make([][2]float64, 0, len(ring))
-			for _, position := range ring {
-				if len(position) < 2 {
-					return nil, fmt.Errorf("position %v has fewer than 2 coordinates", position)
-				}
-				points = append(points, [2]float64{position[0], position[1]})
+		for ringIndex, ring := range rings {
+			points, err := normaliseRing(ring)
+			if err != nil {
+				return nil, nil, err
+			}
+			if ringIndex > 0 && len(points) < minRingPositions {
+				droppedHoles = append(droppedHoles, fmt.Sprintf("dropped hole with %d positions; at least %d are required", len(points), minRingPositions))
+				continue
 			}
 			polygon = append(polygon, points)
 		}
 		result = append(result, polygon)
 	}
-	return result, nil
+	return result, droppedHoles, nil
+}
+
+// normaliseRing truncates every position of a ring to [lon, lat].
+func normaliseRing(ring [][]float64) ([][2]float64, error) {
+	points := make([][2]float64, 0, len(ring))
+	for _, position := range ring {
+		if len(position) < 2 {
+			return nil, fmt.Errorf("position %v has fewer than 2 coordinates", position)
+		}
+		points = append(points, [2]float64{position[0], position[1]})
+	}
+	return points, nil
 }
