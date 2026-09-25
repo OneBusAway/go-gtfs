@@ -27,6 +27,9 @@ type Static struct {
 	Trips     []ScheduledTrip
 	Shapes    []Shape
 
+	// BookingRules is nil when booking_rules.txt is absent.
+	BookingRules []BookingRule
+
 	// Warnings raised during GTFS static parsing.
 	Warnings []warnings.StaticWarning
 }
@@ -161,6 +164,29 @@ type Frequency struct {
 	ExactTimes ExactTimes
 }
 
+// BookingRule corresponds to a single row in the booking_rules.txt file.
+//
+// Fields that GTFS marks conditionally required are pointers and stay nil when
+// the feed omits them; real feeds do omit them, and consumers decide how to
+// treat the gap.
+type BookingRule struct {
+	Id                     string
+	Type                   BookingType
+	PriorNoticeDurationMin *int32 // minutes
+	PriorNoticeDurationMax *int32 // minutes
+	PriorNoticeLastDay     *int32
+	PriorNoticeLastTime    *time.Duration
+	PriorNoticeStartDay    *int32
+	PriorNoticeStartTime   *time.Duration
+	PriorNoticeServiceId   string
+	Message                string
+	PickupMessage          string
+	DropOffMessage         string
+	PhoneNumber            string
+	InfoUrl                string
+	BookingUrl             string
+}
+
 type ParseStaticOptions struct {
 	// If true, wheelchair boarding information is inherited from parent station
 	// when unspecified for a child stop/platform, entrance, or exit.
@@ -244,6 +270,14 @@ func ParseStatic(content []byte, opts ParseStaticOptions) (*Static, error) {
 				for idx, shape := range result.Shapes {
 					shapeIdToShape[shape.ID] = &result.Shapes[idx]
 				}
+				return
+			},
+			Optional: true,
+		},
+		{
+			File: constants.BookingRulesFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				result.BookingRules, w = parseBookingRules(file)
 				return
 			},
 			Optional: true,
@@ -884,6 +918,78 @@ func parseGtfsTimeToDuration(s string) (time.Duration, bool) {
 	minutes := pieces[1]
 	seconds := pieces[2]
 	return time.Duration((hours*60+minutes)*60+seconds) * time.Second, true
+}
+
+// parseOptionalGtfsTime parses an optional HH:MM:SS cell; nil when the cell is
+// empty or unparsable.
+func parseOptionalGtfsTime(s string) *time.Duration {
+	d, ok := parseGtfsTimeToDuration(s)
+	if !ok {
+		return nil
+	}
+	return &d
+}
+
+func parseBookingRules(csv *csv.File) ([]BookingRule, []warnings.StaticWarning) {
+	idColumn := csv.RequiredColumn("booking_rule_id")
+	typeColumn := csv.RequiredColumn("booking_type")
+	durationMinColumn := csv.OptionalColumn("prior_notice_duration_min")
+	durationMaxColumn := csv.OptionalColumn("prior_notice_duration_max")
+	lastDayColumn := csv.OptionalColumn("prior_notice_last_day")
+	lastTimeColumn := csv.OptionalColumn("prior_notice_last_time")
+	startDayColumn := csv.OptionalColumn("prior_notice_start_day")
+	startTimeColumn := csv.OptionalColumn("prior_notice_start_time")
+	serviceIDColumn := csv.OptionalColumn("prior_notice_service_id")
+	messageColumn := csv.OptionalColumn("message")
+	pickupMessageColumn := csv.OptionalColumn("pickup_message")
+	dropOffMessageColumn := csv.OptionalColumn("drop_off_message")
+	phoneNumberColumn := csv.OptionalColumn("phone_number")
+	infoUrlColumn := csv.OptionalColumn("info_url")
+	bookingUrlColumn := csv.OptionalColumn("booking_url")
+
+	if w := checkForMissingColumns(csv); len(w) > 0 {
+		return nil, w
+	}
+
+	var w []warnings.StaticWarning
+	var rules []BookingRule
+	for csv.NextRow() {
+		id := idColumn.Read()
+		rawType := typeColumn.Read()
+		if missingKeys := csv.MissingRowKeys(); len(missingKeys) > 0 {
+			w = append(w, warnings.NewStaticWarning(csv, warnings.BookingRuleInvalid{
+				BookingRuleID: id,
+				Reason:        fmt.Sprintf("missing values %s", missingKeys),
+			}))
+			continue
+		}
+		bookingType, ok := parseBookingType(rawType)
+		if !ok {
+			w = append(w, warnings.NewStaticWarning(csv, warnings.BookingRuleInvalid{
+				BookingRuleID: id,
+				Reason:        fmt.Sprintf("unparsable booking_type %q", rawType),
+			}))
+			continue
+		}
+		rules = append(rules, BookingRule{
+			Id:                     id,
+			Type:                   bookingType,
+			PriorNoticeDurationMin: parseInt32(durationMinColumn.Read()),
+			PriorNoticeDurationMax: parseInt32(durationMaxColumn.Read()),
+			PriorNoticeLastDay:     parseInt32(lastDayColumn.Read()),
+			PriorNoticeLastTime:    parseOptionalGtfsTime(lastTimeColumn.Read()),
+			PriorNoticeStartDay:    parseInt32(startDayColumn.Read()),
+			PriorNoticeStartTime:   parseOptionalGtfsTime(startTimeColumn.Read()),
+			PriorNoticeServiceId:   serviceIDColumn.Read(),
+			Message:                messageColumn.Read(),
+			PickupMessage:          pickupMessageColumn.Read(),
+			DropOffMessage:         dropOffMessageColumn.Read(),
+			PhoneNumber:            phoneNumberColumn.Read(),
+			InfoUrl:                infoUrlColumn.Read(),
+			BookingUrl:             bookingUrlColumn.Read(),
+		})
+	}
+	return rules, w
 }
 
 type ShapeRow struct {

@@ -498,6 +498,136 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
+			desc: "booking rules with all fields",
+			content: newZipBuilder().add(
+				"booking_rules.txt",
+				"booking_rule_id,booking_type,prior_notice_duration_min,prior_notice_duration_max,"+
+					"prior_notice_last_day,prior_notice_last_time,prior_notice_start_day,prior_notice_start_time,"+
+					"prior_notice_service_id,message,pickup_message,drop_off_message,phone_number,info_url,booking_url",
+				"br_1,2,,,1,17:00:00,14,00:00:00,weekdays,msg,pmsg,dmsg,555-0100,https://info.example,https://book.example",
+				"br_2,1,60,1440,,,,,,,,,,,",
+			).build(),
+			expected: &Static{
+				BookingRules: []BookingRule{
+					{
+						Id:                   "br_1",
+						Type:                 BookingType_PriorDays,
+						PriorNoticeLastDay:   ptr(int32(1)),
+						PriorNoticeLastTime:  ptr(17 * time.Hour),
+						PriorNoticeStartDay:  ptr(int32(14)),
+						PriorNoticeStartTime: ptr(time.Duration(0)),
+						PriorNoticeServiceId: "weekdays",
+						Message:              "msg",
+						PickupMessage:        "pmsg",
+						DropOffMessage:       "dmsg",
+						PhoneNumber:          "555-0100",
+						InfoUrl:              "https://info.example",
+						BookingUrl:           "https://book.example",
+					},
+					{
+						Id:                     "br_2",
+						Type:                   BookingType_SameDay,
+						PriorNoticeDurationMin: ptr(int32(60)),
+						PriorNoticeDurationMax: ptr(int32(1440)),
+					},
+				},
+			},
+		},
+		{
+			// Real Michigan feeds omit prior_notice_duration_min on type 1 and
+			// prior_notice_last_time on type 2. Import them with nils (spec §9.4).
+			desc: "booking rules missing conditionally required fields",
+			content: newZipBuilder().add(
+				"booking_rules.txt",
+				"booking_rule_id,booking_type,prior_notice_duration_min,prior_notice_last_day,prior_notice_last_time",
+				"br_same_day,1,,,",
+				"br_prior_days,2,,7,",
+			).build(),
+			expected: &Static{
+				BookingRules: []BookingRule{
+					{Id: "br_same_day", Type: BookingType_SameDay},
+					{Id: "br_prior_days", Type: BookingType_PriorDays, PriorNoticeLastDay: ptr(int32(7))},
+				},
+			},
+		},
+		{
+			desc: "booking rule with unparsable time is kept with a nil time",
+			content: newZipBuilder().add(
+				"booking_rules.txt",
+				"booking_rule_id,booking_type,prior_notice_last_time",
+				"br_1,2,soon",
+			).build(),
+			expected: &Static{
+				BookingRules: []BookingRule{{Id: "br_1", Type: BookingType_PriorDays}},
+			},
+		},
+		{
+			desc: "booking rule with unparsable type is skipped",
+			content: newZipBuilder().add(
+				"booking_rules.txt",
+				"booking_rule_id,booking_type",
+				"br_ok,0",
+				"br_bad,9",
+			).build(),
+			expected: &Static{
+				BookingRules: []BookingRule{{Id: "br_ok", Type: BookingType_RealTime}},
+				Warnings: []warnings.StaticWarning{
+					{
+						Kind:          warnings.BookingRuleInvalid{BookingRuleID: "br_bad", Reason: `unparsable booking_type "9"`},
+						File:          constants.BookingRulesFile,
+						RowNumber:     2,
+						RowContent:    []string{"br_bad", "9"},
+						HeaderContent: []string{"booking_rule_id", "booking_type"},
+					},
+				},
+			},
+		},
+		{
+			desc: "booking rule with missing id is skipped",
+			content: newZipBuilder().add(
+				"booking_rules.txt",
+				"booking_rule_id,booking_type",
+				",1",
+			).build(),
+			expected: &Static{
+				Warnings: []warnings.StaticWarning{
+					{
+						Kind:          warnings.BookingRuleInvalid{BookingRuleID: "", Reason: "missing values [booking_rule_id]"},
+						File:          constants.BookingRulesFile,
+						RowNumber:     1,
+						RowContent:    []string{"", "1"},
+						HeaderContent: []string{"booking_rule_id", "booking_type"},
+					},
+				},
+			},
+		},
+		{
+			desc: "booking rules file with missing columns",
+			content: newZipBuilder().add(
+				"booking_rules.txt",
+				"booking_rule_id\nbr_1",
+			).build(),
+			expected: &Static{
+				Warnings: []warnings.StaticWarning{
+					{
+						Kind:          warnings.MissingColumns{Columns: []string{"booking_type"}},
+						File:          constants.BookingRulesFile,
+						RowNumber:     0,
+						RowContent:    []string{"booking_rule_id"},
+						HeaderContent: []string{"booking_rule_id"},
+					},
+				},
+			},
+		},
+		{
+			desc: "header-only booking rules file yields nil",
+			content: newZipBuilder().add(
+				"booking_rules.txt",
+				"booking_rule_id,booking_type",
+			).build(),
+			expected: &Static{},
+		},
+		{
 			desc: "trip",
 			content: newZipBuilder().add(
 				"agency.txt",
