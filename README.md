@@ -52,7 +52,7 @@ Below is a list of the GTFS schedule files and whether they are currently suppor
 | File Name                                                                                              | Supported | Required by Spec        | Notes                                                       |
 | ------------------------------------------------------------------------------------------------------ | --------- | ----------------------- | ----------------------------------------------------------- |
 | [agency.txt](https://gtfs.org/documentation/schedule/reference/#agencytxt)                             | ✅        | Required                |                                                             |
-| [stops.txt](https://gtfs.org/documentation/schedule/reference/#stopstxt)                               | ✅        | Conditionally Required  | Always required by library                                  |
+| [stops.txt](https://gtfs.org/documentation/schedule/reference/#stopstxt)                               | ✅        | Conditionally Required  | Optional only when locations.geojson is present              |
 | [routes.txt](https://gtfs.org/documentation/schedule/reference/#routestxt)                             | ✅        | Required                |                                                             |
 | [trips.txt](https://gtfs.org/documentation/schedule/reference/#tripstxt)                               | ✅        | Required                |                                                             |
 | [stop_times.txt](https://gtfs.org/documentation/schedule/reference/#stop_timestxt)                     | ✅        | Required                |                                                             |
@@ -70,15 +70,15 @@ Below is a list of the GTFS schedule files and whether they are currently suppor
 | [stop_areas.txt](https://gtfs.org/documentation/schedule/reference/#stop_areastxt)                     | ❌        | Optional                |                                                             |
 | [networks.txt](https://gtfs.org/documentation/schedule/reference/#networkstxt)                         | ❌        | Conditionally Forbidden |                                                             |
 | [route_networks.txt](https://gtfs.org/documentation/schedule/reference/#route_networkstxt)             | ❌        | Conditionally Forbidden |                                                             |
-| [location_groups.txt](https://gtfs.org/documentation/schedule/reference/#location_groupstxt)           | ❌        | Conditionally Forbidden |                                                             |
+| [location_groups.txt](https://gtfs.org/documentation/schedule/reference/#location_groupstxt)           | ✅        | Optional                |                                                             |
 | [shapes.txt](https://gtfs.org/documentation/schedule/reference/#shapestxt)                             | ✅        | Optional                |                                                             |
 | [frequencies.txt](https://gtfs.org/documentation/schedule/reference/#frequenciestxt)                   | ✅        | Optional                |                                                             |
 | [transfers.txt](https://gtfs.org/documentation/schedule/reference/#transferstxt)                       | 🟨        | Optional                | Partially implemented                                       |
 | [pathways.txt](https://gtfs.org/documentation/schedule/reference/#pathwaystxt)                         | ❌        | Optional                |                                                             |
 | [levels.txt](https://gtfs.org/documentation/schedule/reference/#levelstxt)                             | ❌        | Conditionally Required  |                                                             |
-| [location_group_stops.txt](https://gtfs.org/documentation/schedule/reference/#location_group_stopstxt) | ❌        | Optional                |                                                             |
-| [locations.geojson](https://gtfs.org/documentation/schedule/reference/#locationsgeojson)               | ❌        | Optional                |                                                             |
-| [booking_rules.txt](https://gtfs.org/documentation/schedule/reference/#booking_rulestxt)               | ❌        | Optional                |                                                             |
+| [location_group_stops.txt](https://gtfs.org/documentation/schedule/reference/#location_group_stopstxt) | ✅        | Optional                |                                                             |
+| [locations.geojson](https://gtfs.org/documentation/schedule/reference/#locationsgeojson)               | ✅        | Optional                | Polygon and MultiPolygon only                               |
+| [booking_rules.txt](https://gtfs.org/documentation/schedule/reference/#booking_rulestxt)               | ✅        | Optional                |                                                             |
 | [translations.txt](https://gtfs.org/documentation/schedule/reference/#translationstxt)                 | ❌        | Optional                |                                                             |
 | [feed_info.txt](https://gtfs.org/documentation/schedule/reference/#feed_infotxt)                       | ❌        | Conditionally Required  |                                                             |
 | [attributions.txt](https://gtfs.org/documentation/schedule/reference/#attributionstxt)                 | ❌        | Optional                |                                                             |
