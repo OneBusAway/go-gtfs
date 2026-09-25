@@ -1,6 +1,9 @@
 package gtfs
 
-import "strconv"
+import (
+	"strconv"
+	"strings"
+)
 
 // BikesAllowed describes whether bikes are allowed on a scheduled trip.
 //
@@ -1010,8 +1013,11 @@ const (
 	BookingType_PriorDays BookingType = 2
 )
 
+// parseBookingType parses a booking_type cell. Surrounding whitespace is
+// ignored: booking_type is required, so rejecting a padded value would drop the
+// rule and, with it, every stop_time that references it.
 func parseBookingType(s string) (BookingType, bool) {
-	switch s {
+	switch strings.TrimSpace(s) {
 	case "0":
 		return BookingType_RealTime, true
 	case "1":

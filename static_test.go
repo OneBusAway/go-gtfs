@@ -563,6 +563,17 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
+			desc: "booking rule with whitespace-padded type is kept",
+			content: newZipBuilder().add(
+				"booking_rules.txt",
+				"booking_rule_id,booking_type",
+				"br_1, 1 ",
+			).build(),
+			expected: &Static{
+				BookingRules: []BookingRule{{Id: "br_1", Type: BookingType_SameDay}},
+			},
+		},
+		{
 			desc: "booking rule with unparsable type is skipped",
 			content: newZipBuilder().add(
 				"booking_rules.txt",
