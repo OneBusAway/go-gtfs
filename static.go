@@ -134,6 +134,10 @@ type ScheduledTrip struct {
 	StopTimes            []ScheduledStopTime
 	Shape                *Shape
 	Frequencies          []Frequency
+	// SafeDurationFactor and SafeDurationOffset (GTFS-Flex) scale the
+	// scheduled travel time into a rider-facing upper bound. Nil when absent.
+	SafeDurationFactor *float64
+	SafeDurationOffset *float64
 }
 
 type ScheduledStopTime struct {
@@ -881,6 +885,8 @@ func parseScheduledTrips(csv *csv.File, routes []Route, services []Service, shap
 	wheelchairAccessibleColumn := csv.OptionalColumn("wheelchair_accessible")
 	bikesAllowedColumn := csv.OptionalColumn("bikes_allowed")
 	shapeIDColumn := csv.OptionalColumn("shape_id")
+	safeDurationFactorColumn := csv.OptionalColumn("safe_duration_factor")
+	safeDurationOffsetColumn := csv.OptionalColumn("safe_duration_offset")
 
 	if err := csv.MissingRequiredColumns(); err != nil {
 		fmt.Println(err)
@@ -907,6 +913,8 @@ func parseScheduledTrips(csv *csv.File, routes []Route, services []Service, shap
 			BlockID:              blockIDColumn.Read(),
 			WheelchairAccessible: parseWheelchairBoarding(wheelchairAccessibleColumn.Read()),
 			BikesAllowed:         parseBikesAllowed(bikesAllowedColumn.ReadOr("")),
+			SafeDurationFactor:   parseFloat64(safeDurationFactorColumn.Read()),
+			SafeDurationOffset:   parseFloat64(safeDurationOffsetColumn.Read()),
 		}
 
 		shapeIDOrNil := shapeIDColumn.Read()

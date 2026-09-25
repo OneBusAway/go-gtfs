@@ -1096,6 +1096,44 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
+			desc: "trip with safe duration",
+			content: newZipBuilder().add(
+				"agency.txt",
+				"agency_id,agency_name,agency_url,agency_timezone\na,b,c,d",
+			).add(
+				"routes.txt",
+				"route_id,route_type\nroute_id,3",
+			).add(
+				"calendar.txt",
+				"service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n"+
+					"service_id,0,0,0,0,0,0,0,20220504,20220507",
+			).add(
+				"trips.txt",
+				"route_id,service_id,trip_id,safe_duration_factor,safe_duration_offset",
+				"route_id,service_id,a,2,30",
+				"route_id,service_id,b,,",
+			).build(),
+			expected: &Static{
+				Agencies: []Agency{defaultAgency},
+				Routes:   []Route{defaultRoute},
+				Services: []Service{defaultService},
+				Trips: []ScheduledTrip{
+					{
+						Route:              &defaultRoute,
+						Service:            &defaultService,
+						ID:                 "a",
+						SafeDurationFactor: ptr(2.0),
+						SafeDurationOffset: ptr(30.0),
+					},
+					{
+						Route:   &defaultRoute,
+						Service: &defaultService,
+						ID:      "b",
+					},
+				},
+			},
+		},
+		{
 			desc: "stop with spaces in lat/lon",
 			content: newZipBuilder().add(
 				"stops.txt",
