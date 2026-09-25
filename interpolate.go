@@ -52,6 +52,10 @@ func interpolateStopTimes(times []ScheduledStopTime) []ScheduledStopTime {
 	return result
 }
 
+// interpolateStopTimesByShapeDist fills missing arrival/departure times using
+// shape_dist_traveled as the weight. A gap in which any record (including the
+// two bounding timed records) has no distance falls back to even
+// interpolation for that gap.
 func interpolateStopTimesByShapeDist(times []ScheduledStopTime) []ScheduledStopTime {
 	result := make([]ScheduledStopTime, len(times))
 	copy(result, times)
@@ -63,40 +67,56 @@ func interpolateStopTimesByShapeDist(times []ScheduledStopTime) []ScheduledStopT
 	for tType := 0; tType < 2; tType++ {
 		i := 0
 		for i < n {
-			if getTime(&result[i], tType) == 0 {
-				startIdx := i - 1
-				var startTime time.Duration
-				var startDist float64
-				if startIdx >= 0 && result[startIdx].ShapeDistanceTraveled != nil {
-					startTime = getTime(&result[startIdx], tType)
-					startDist = *result[startIdx].ShapeDistanceTraveled
-				}
-				endIdx := i
-				for endIdx < n && getTime(&result[endIdx], tType) == 0 {
-					endIdx++
-				}
-				var endTime time.Duration
-				var endDist float64
-				if endIdx < n && result[endIdx].ShapeDistanceTraveled != nil {
-					endTime = getTime(&result[endIdx], tType)
-					endDist = *result[endIdx].ShapeDistanceTraveled
-				}
-				intervals := endIdx - startIdx
-				if startIdx >= 0 && endIdx < n && endDist > startDist && endTime > startTime && intervals > 0 {
-					for j := 1; j < intervals; j++ {
-						dist := *result[startIdx+j].ShapeDistanceTraveled
-						w := (dist - startDist) / (endDist - startDist)
-						interpolated := startTime + time.Duration(float64(endTime-startTime)*w)
-						setTime(&result[startIdx+j], tType, interpolated)
-					}
-				}
-				i = endIdx
-			} else {
+			if getTime(&result[i], tType) != 0 {
 				i++
+				continue
 			}
+			startIdx := i - 1
+			endIdx := i
+			for endIdx < n && getTime(&result[endIdx], tType) == 0 {
+				endIdx++
+			}
+			intervals := endIdx - startIdx
+			if startIdx < 0 || endIdx >= n || intervals <= 0 {
+				i = endIdx
+				continue
+			}
+			startTime := getTime(&result[startIdx], tType)
+			endTime := getTime(&result[endIdx], tType)
+			if endTime <= startTime {
+				i = endIdx
+				continue
+			}
+			dists, ok := gapShapeDistances(result[startIdx : endIdx+1])
+			if ok && dists[intervals] > dists[0] {
+				span := dists[intervals] - dists[0]
+				for j := 1; j < intervals; j++ {
+					w := (dists[j] - dists[0]) / span
+					setTime(&result[startIdx+j], tType, startTime+time.Duration(float64(endTime-startTime)*w))
+				}
+			} else {
+				delta := (endTime - startTime) / time.Duration(intervals)
+				for j := 1; j < intervals; j++ {
+					setTime(&result[startIdx+j], tType, startTime+time.Duration(j)*delta)
+				}
+			}
+			i = endIdx
 		}
 	}
 	return result
+}
+
+// gapShapeDistances returns the shape distances of every record in gap, or
+// false when any record has none.
+func gapShapeDistances(gap []ScheduledStopTime) ([]float64, bool) {
+	dists := make([]float64, len(gap))
+	for i := range gap {
+		if gap[i].ShapeDistanceTraveled == nil {
+			return nil, false
+		}
+		dists[i] = *gap[i].ShapeDistanceTraveled
+	}
+	return dists, true
 }
 
 // Helpers to get/set arrival/departure by index

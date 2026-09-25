@@ -156,3 +156,35 @@ func TestInterpolateStopTimesByShapeDist_MissingLast(t *testing.T) {
 		t.Errorf("shape last missing: departures should remain zero, got: %v %v", got[1].DepartureTime, got[2].DepartureTime)
 	}
 }
+
+func TestInterpolateStopTimesByShapeDist_NilDistanceFallsBackToEven(t *testing.T) {
+	st := []ScheduledStopTime{
+		{StopSequence: 1, ArrivalTime: dur("08:00:00"), DepartureTime: dur("08:00:00"), ShapeDistanceTraveled: ptr(0.0), ExactTimes: true},
+		{StopSequence: 2},
+		{StopSequence: 3, ShapeDistanceTraveled: ptr(9.0)},
+		{StopSequence: 4, ArrivalTime: dur("08:30:00"), DepartureTime: dur("08:30:00"), ShapeDistanceTraveled: ptr(10.0), ExactTimes: true},
+	}
+	wantArr := []time.Duration{dur("08:00:00"), dur("08:10:00"), dur("08:20:00"), dur("08:30:00")}
+
+	got := interpolateStopTimesByShapeDist(st)
+	for i := range got {
+		if !almostEq(got[i].ArrivalTime, wantArr[i]) {
+			t.Errorf("nil distance: arrival %d: want %v got %v", i, wantArr[i], got[i].ArrivalTime)
+		}
+		if !almostEq(got[i].DepartureTime, wantArr[i]) {
+			t.Errorf("nil distance: depart %d: want %v got %v", i, wantArr[i], got[i].DepartureTime)
+		}
+	}
+}
+
+func TestInterpolateStopTimesByShapeDist_NilEndpointDistanceFallsBackToEven(t *testing.T) {
+	st := []ScheduledStopTime{
+		{StopSequence: 1, ArrivalTime: dur("08:00:00"), DepartureTime: dur("08:00:00")},
+		{StopSequence: 2, ShapeDistanceTraveled: ptr(9.0)},
+		{StopSequence: 3, ArrivalTime: dur("08:20:00"), DepartureTime: dur("08:20:00"), ShapeDistanceTraveled: ptr(10.0)},
+	}
+	got := interpolateStopTimesByShapeDist(st)
+	if !almostEq(got[1].ArrivalTime, dur("08:10:00")) {
+		t.Errorf("nil endpoint distance: want 08:10:00 got %v", got[1].ArrivalTime)
+	}
+}
