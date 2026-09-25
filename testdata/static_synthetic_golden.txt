@@ -211,4 +211,4 @@ trip trip_7 route=route_2 service=service_1 "Headsign 2" "" TRUE block_1 NOT_SPE
   stop_time trip=false stop=stop_13 arr=6h13m0s dep=6h13m0s seq=7 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 900.25 false
   stop_time trip=false stop=stop_14 arr=6h14m0s dep=6h14m0s seq=8 "" NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED 1050.25 true
   stop_time trip=false stop=stop_15 arr=6h15m0s dep=6h15m0s seq=9 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 1200.25 true
-warnings 0
+warnings 1
