@@ -5,6 +5,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"sort"
 	"strconv"
@@ -27,6 +28,8 @@ type Static struct {
 	Trips     []ScheduledTrip
 	Shapes    []Shape
 
+	// Locations is nil when locations.geojson is absent.
+	Locations []Location
 	// BookingRules is nil when booking_rules.txt is absent.
 	BookingRules []BookingRule
 
@@ -204,6 +207,10 @@ func ParseStatic(content []byte, opts ParseStaticOptions) (*Static, error) {
 	for _, file := range reader.File {
 		fileNameToFile[constants.StaticFile(file.Name)] = file
 	}
+	locationsPresent, err := parseLocationsFile(fileNameToFile[constants.LocationsGeoJSONFile], result)
+	if err != nil {
+		return nil, err
+	}
 	serviceIdToService := map[string]Service{}
 	shapeIdToShape := map[string]*Shape{}
 	tripIdToScheduledTrip := map[string]*ScheduledTrip{}
@@ -241,6 +248,8 @@ func ParseStatic(content []byte, opts ParseStaticOptions) (*Static, error) {
 				result.Stops = parseStops(file, opts.InheritWheelchairBoarding)
 				return
 			},
+			// GTFS makes stops.txt optional when locations.geojson defines zones.
+			Optional: locationsPresent,
 		},
 		{
 			File: "calendar.txt",
@@ -357,6 +366,35 @@ func openCsvFile(file constants.StaticFile, zipFile *zip.File) (*csv.File, error
 // not provided. A zero-byte file has no header row and is meaningless.
 func isAbsentOrEmpty(zipFile *zip.File) bool {
 	return zipFile == nil || zipFile.UncompressedSize64 == 0
+}
+
+// parseLocationsFile reads locations.geojson, when present and non-empty, into
+// result. It runs before the CSV files because its presence decides whether
+// stops.txt is required. Only the exact name locations.geojson is read.
+func parseLocationsFile(zipFile *zip.File, result *Static) (present bool, err error) {
+	if isAbsentOrEmpty(zipFile) {
+		return false, nil
+	}
+	content, err := readZipFile(zipFile)
+	if err != nil {
+		return false, fmt.Errorf("failed to read %q: %w", constants.LocationsGeoJSONFile, err)
+	}
+	locations, w, err := parseLocations(content)
+	if err != nil {
+		return false, fmt.Errorf("failed to read %q: %w", constants.LocationsGeoJSONFile, err)
+	}
+	result.Locations = locations
+	result.Warnings = append(result.Warnings, w...)
+	return true, nil
+}
+
+func readZipFile(zipFile *zip.File) ([]byte, error) {
+	reader, err := zipFile.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+	return io.ReadAll(reader)
 }
 
 func parseAgencies(csv *csv.File) ([]Agency, []warnings.StaticWarning) {

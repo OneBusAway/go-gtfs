@@ -3,6 +3,7 @@ package gtfs
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/json"
 	"io"
 	"strings"
 	"testing"
@@ -624,6 +625,258 @@ func TestParse(t *testing.T) {
 			content: newZipBuilder().add(
 				"booking_rules.txt",
 				"booking_rule_id,booking_type",
+			).build(),
+			expected: &Static{},
+		},
+		{
+			desc: "locations.geojson polygon",
+			content: newZipBuilder().add(
+				"locations.geojson",
+				`{"type":"FeatureCollection","features":[{"type":"Feature","id":"zone_a",`+
+					`"properties":{"stop_name":"Zone A","stop_desc":"North side"},`+
+					`"geometry":{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}}]}`,
+			).build(),
+			expected: &Static{
+				Locations: []Location{
+					{
+						Id:          "zone_a",
+						Name:        "Zone A",
+						Description: "North side",
+						Geometry: LocationGeometry{
+							Type:     "Polygon",
+							Polygons: [][][][2]float64{{{{0, 0}, {1, 0}, {1, 1}, {0, 0}}}},
+							Raw:      json.RawMessage(`{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}`),
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "locations.geojson multipolygon with a hole",
+			content: newZipBuilder().add(
+				"locations.geojson",
+				`{"type":"FeatureCollection","features":[{"type":"Feature","id":"zone_m","properties":{},`+
+					`"geometry":{"type":"MultiPolygon","coordinates":[`+
+					`[[[0,0],[4,0],[4,4],[0,0]],[[1,1],[2,1],[2,2],[1,1]]],`+
+					`[[[10,10],[11,10],[11,11],[10,10]]]]}}]}`,
+			).build(),
+			expected: &Static{
+				Locations: []Location{
+					{
+						Id: "zone_m",
+						Geometry: LocationGeometry{
+							Type: "MultiPolygon",
+							Polygons: [][][][2]float64{
+								{{{0, 0}, {4, 0}, {4, 4}, {0, 0}}, {{1, 1}, {2, 1}, {2, 2}, {1, 1}}},
+								{{{10, 10}, {11, 10}, {11, 11}, {10, 10}}},
+							},
+							Raw: json.RawMessage(`{"type":"MultiPolygon","coordinates":[` +
+								`[[[0,0],[4,0],[4,4],[0,0]],[[1,1],[2,1],[2,2],[1,1]]],` +
+								`[[[10,10],[11,10],[11,11],[10,10]]]]}`),
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "locations.geojson numeric feature id",
+			content: newZipBuilder().add(
+				"locations.geojson",
+				`{"type":"FeatureCollection","features":[{"type":"Feature","id":42,"properties":{},`+
+					`"geometry":{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}}]}`,
+			).build(),
+			expected: &Static{
+				Locations: []Location{
+					{
+						Id: "42",
+						Geometry: LocationGeometry{
+							Type:     "Polygon",
+							Polygons: [][][][2]float64{{{{0, 0}, {1, 0}, {1, 1}, {0, 0}}}},
+							Raw:      json.RawMessage(`{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}`),
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "locations.geojson id falls back to properties",
+			content: newZipBuilder().add(
+				"locations.geojson",
+				`{"type":"FeatureCollection","features":[`+
+					`{"type":"Feature","properties":{"id":"from_props"},`+
+					`"geometry":{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}},`+
+					`{"type":"Feature","properties":{"location_id":"from_draft"},`+
+					`"geometry":{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}}]}`,
+			).build(),
+			expected: &Static{
+				Locations: []Location{
+					{
+						Id: "from_props",
+						Geometry: LocationGeometry{
+							Type:     "Polygon",
+							Polygons: [][][][2]float64{{{{0, 0}, {1, 0}, {1, 1}, {0, 0}}}},
+							Raw:      json.RawMessage(`{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}`),
+						},
+					},
+					{
+						Id: "from_draft",
+						Geometry: LocationGeometry{
+							Type:     "Polygon",
+							Polygons: [][][][2]float64{{{{0, 0}, {1, 0}, {1, 1}, {0, 0}}}},
+							Raw:      json.RawMessage(`{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}`),
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "locations.geojson altitude is dropped",
+			content: newZipBuilder().add(
+				"locations.geojson",
+				`{"type":"FeatureCollection","features":[{"type":"Feature","id":"z","properties":{},`+
+					`"geometry":{"type":"Polygon","coordinates":[[[0,0,5],[1,0,5],[1,1,5],[0,0,5]]]}}]}`,
+			).build(),
+			expected: &Static{
+				Locations: []Location{
+					{
+						Id: "z",
+						Geometry: LocationGeometry{
+							Type:     "Polygon",
+							Polygons: [][][][2]float64{{{{0, 0}, {1, 0}, {1, 1}, {0, 0}}}},
+							Raw:      json.RawMessage(`{"type":"Polygon","coordinates":[[[0,0,5],[1,0,5],[1,1,5],[0,0,5]]]}`),
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "locations.geojson BOM is stripped",
+			content: newZipBuilder().add(
+				"locations.geojson",
+				"\xef\xbb\xbf"+`{"type":"FeatureCollection","features":[{"type":"Feature","id":"z","properties":{},`+
+					`"geometry":{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}}]}`,
+			).build(),
+			expected: &Static{
+				Locations: []Location{
+					{
+						Id: "z",
+						Geometry: LocationGeometry{
+							Type:     "Polygon",
+							Polygons: [][][][2]float64{{{{0, 0}, {1, 0}, {1, 1}, {0, 0}}}},
+							Raw:      json.RawMessage(`{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}`),
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "locations.geojson unsupported geometry warns",
+			content: newZipBuilder().add(
+				"locations.geojson",
+				`{"type":"FeatureCollection","features":[{"type":"Feature","id":"pt","properties":{},`+
+					`"geometry":{"type":"Point","coordinates":[0,0]}}]}`,
+			).build(),
+			expected: &Static{
+				Warnings: []warnings.StaticWarning{
+					warnings.NewFileWarning(constants.LocationsGeoJSONFile, warnings.LocationInvalidGeometry{
+						LocationID: "pt",
+						Reason:     `unsupported geometry type "Point"`,
+					}),
+				},
+			},
+		},
+		{
+			desc: "locations.geojson null geometry warns",
+			content: newZipBuilder().add(
+				"locations.geojson",
+				`{"type":"FeatureCollection","features":[`+
+					`{"type":"Feature","id":"null_geom","properties":{},"geometry":null},`+
+					`{"type":"Feature","id":"no_geom","properties":{}}]}`,
+			).build(),
+			expected: &Static{
+				Warnings: []warnings.StaticWarning{
+					warnings.NewFileWarning(constants.LocationsGeoJSONFile, warnings.LocationInvalidGeometry{
+						LocationID: "null_geom",
+						Reason:     "feature has no geometry",
+					}),
+					warnings.NewFileWarning(constants.LocationsGeoJSONFile, warnings.LocationInvalidGeometry{
+						LocationID: "no_geom",
+						Reason:     "feature has no geometry",
+					}),
+				},
+			},
+		},
+		{
+			desc: "locations.geojson polygon with no rings warns",
+			content: newZipBuilder().add(
+				"locations.geojson",
+				`{"type":"FeatureCollection","features":[{"type":"Feature","id":"empty","properties":{},`+
+					`"geometry":{"type":"Polygon","coordinates":[]}}]}`,
+			).build(),
+			expected: &Static{
+				Warnings: []warnings.StaticWarning{
+					warnings.NewFileWarning(constants.LocationsGeoJSONFile, warnings.LocationInvalidGeometry{
+						LocationID: "empty",
+						Reason:     "polygon has no rings",
+					}),
+				},
+			},
+		},
+		{
+			desc: "locations.geojson feature without id warns",
+			content: newZipBuilder().add(
+				"locations.geojson",
+				`{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},`+
+					`"geometry":{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}}]}`,
+			).build(),
+			expected: &Static{
+				Warnings: []warnings.StaticWarning{
+					warnings.NewFileWarning(constants.LocationsGeoJSONFile, warnings.LocationInvalidGeometry{
+						Reason: "feature has no id",
+					}),
+				},
+			},
+		},
+		{
+			desc: "location.geojson (singular) is ignored",
+			content: newZipBuilder().add(
+				"location.geojson",
+				`{"type":"FeatureCollection","features":[{"type":"Feature","id":"z","properties":{},`+
+					`"geometry":{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}}]}`,
+			).build(),
+			expected: &Static{},
+		},
+		{
+			desc: "zero-byte locations.geojson is treated as absent",
+			content: newZipBuilder().add(
+				"locations.geojson", "",
+			).build(),
+			expected: &Static{},
+		},
+		{
+			desc: "stops.txt is optional when locations.geojson is present",
+			content: newZipBuilder().remove("stops.txt").add(
+				"locations.geojson",
+				`{"type":"FeatureCollection","features":[{"type":"Feature","id":"z","properties":{},`+
+					`"geometry":{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}}]}`,
+			).build(),
+			expected: &Static{
+				Locations: []Location{
+					{
+						Id: "z",
+						Geometry: LocationGeometry{
+							Type:     "Polygon",
+							Polygons: [][][][2]float64{{{{0, 0}, {1, 0}, {1, 1}, {0, 0}}}},
+							Raw:      json.RawMessage(`{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}`),
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "header-only stops.txt parses to zero stops",
+			content: newZipBuilder().add(
+				"stops.txt", "stop_id,stop_name,stop_lat,stop_lon",
 			).build(),
 			expected: &Static{},
 		},
@@ -1531,6 +1784,11 @@ func (z *zipBuilder) add(fileName string, fileContent ...string) *zipBuilder {
 	return z
 }
 
+func (z *zipBuilder) remove(fileName string) *zipBuilder {
+	delete(z.m, fileName)
+	return z
+}
+
 func (z *zipBuilder) build() []byte {
 	var b bytes.Buffer
 	zipWriter := zip.NewWriter(&b)
@@ -1693,5 +1951,38 @@ func TestParseStatic_UnknownTripIDIsSkipped(t *testing.T) {
 	}
 	if got := len(static.Trips[0].StopTimes); got != 1 {
 		t.Errorf("got %d stop times on trip_id, want 1 (the ghost row must be dropped)", got)
+	}
+}
+
+func TestParseStatic_StopsFileRequiredWithoutLocations(t *testing.T) {
+	content := newZipBuilder().remove("stops.txt").build()
+
+	_, err := ParseStatic(content, ParseStaticOptions{})
+	if err == nil {
+		t.Fatal("ParseStatic() got nil error, want an error because stops.txt is missing")
+	}
+	if want := `no "stops.txt" file in GTFS static feed`; err.Error() != want {
+		t.Errorf("ParseStatic() error = %q, want %q", err.Error(), want)
+	}
+}
+
+func TestParseStatic_MalformedLocationsFileIsAnError(t *testing.T) {
+	for _, tc := range []struct {
+		desc    string
+		content string
+	}{
+		{desc: "not json", content: "{"},
+		{desc: "not a feature collection", content: `{"type":"Feature","features":[]}`},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			content := newZipBuilder().add("locations.geojson", tc.content).build()
+			_, err := ParseStatic(content, ParseStaticOptions{})
+			if err == nil {
+				t.Fatal("ParseStatic() got nil error, want an error")
+			}
+			if !strings.HasPrefix(err.Error(), `failed to read "locations.geojson"`) {
+				t.Errorf("ParseStatic() error = %q, want it to start with the file name", err.Error())
+			}
+		})
 	}
 }
