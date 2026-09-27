@@ -2196,23 +2196,60 @@ func TestParseStatic_StopsFileRequiredWithoutLocations(t *testing.T) {
 	}
 }
 
-func TestParseStatic_MalformedLocationsFileIsAnError(t *testing.T) {
+func TestParseStatic_MalformedLocationsFileIsIgnoredWithWarning(t *testing.T) {
 	for _, tc := range []struct {
-		desc    string
-		content string
+		desc       string
+		content    string
+		wantReason string
 	}{
-		{desc: "not json", content: "{"},
-		{desc: "not a feature collection", content: `{"type":"Feature","features":[]}`},
+		{desc: "not json", content: "{", wantReason: "unexpected end of JSON input"},
+		{desc: "not a feature collection", content: `{"type":"Feature","features":[]}`, wantReason: `expected a FeatureCollection, got "Feature"`},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			content := newZipBuilder().add("locations.geojson", tc.content).build()
-			_, err := ParseStatic(content, ParseStaticOptions{})
-			if err == nil {
-				t.Fatal("ParseStatic() got nil error, want an error")
+			content := newZipBuilderWithDefaults().add("locations.geojson", tc.content).build()
+			static, err := ParseStatic(content, ParseStaticOptions{})
+			if err != nil {
+				t.Fatalf("ParseStatic() got error %v, want nil", err)
 			}
-			if !strings.HasPrefix(err.Error(), `failed to read "locations.geojson"`) {
-				t.Errorf("ParseStatic() error = %q, want it to start with the file name", err.Error())
+			if len(static.Trips) != 1 || len(static.Stops) != 1 {
+				t.Errorf("got %d trips and %d stops, want the fixed-route data to survive a broken locations.geojson", len(static.Trips), len(static.Stops))
+			}
+			if len(static.Locations) != 0 {
+				t.Errorf("got %d locations, want 0", len(static.Locations))
+			}
+			want := warnings.NewFileWarning(constants.LocationsGeoJSONFile, warnings.LocationsFileInvalid{Reason: tc.wantReason})
+			found := false
+			for _, w := range static.Warnings {
+				found = found || cmp.Equal(w, want)
+			}
+			if !found {
+				t.Errorf("Warnings = %v, want one equal to %v", static.Warnings, want)
 			}
 		})
+	}
+}
+
+func TestParseStatic_LocationsFeatureQuirks(t *testing.T) {
+	polygon := `"geometry":{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}`
+	content := newZipBuilder().add("locations.geojson",
+		`{"type":"featurecollection","features":[`+
+			`{"type":"Feature","id":"array_props","properties":[],`+polygon+`},`+
+			`{"type":"Feature","id":["not","scalar"],"properties":{},"geometry":7},`+
+			`{"type":"Feature","id":"kept","properties":{"stop_name":"Kept"},`+polygon+`}]}`,
+	).build()
+
+	static, err := ParseStatic(content, ParseStaticOptions{})
+	if err != nil {
+		t.Fatalf("ParseStatic() got error %v, want nil", err)
+	}
+	var gotIDs []string
+	for _, location := range static.Locations {
+		gotIDs = append(gotIDs, location.Id)
+	}
+	if diff := cmp.Diff(gotIDs, []string{"array_props", "kept"}); diff != "" {
+		t.Errorf("location ids mismatch (-got +want):\n%s", diff)
+	}
+	if static.Locations[1].Name != "Kept" {
+		t.Errorf("Name = %q, want %q", static.Locations[1].Name, "Kept")
 	}
 }

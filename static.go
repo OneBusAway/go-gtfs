@@ -421,7 +421,8 @@ func isAbsentOrEmpty(zipFile *zip.File) bool {
 
 // parseLocationsFile reads locations.geojson, when present and non-empty, into
 // result. It runs before the CSV files because its presence decides whether
-// stops.txt is required. Only the exact name locations.geojson is read.
+// stops.txt is required. Only the exact name locations.geojson is read. A file
+// that cannot be used at all is reported as a warning and treated as absent.
 func parseLocationsFile(zipFile *zip.File, result *Static) (present bool, err error) {
 	if isAbsentOrEmpty(zipFile) {
 		return false, nil
@@ -432,7 +433,11 @@ func parseLocationsFile(zipFile *zip.File, result *Static) (present bool, err er
 	}
 	locations, w, err := parseLocations(content)
 	if err != nil {
-		return false, fmt.Errorf("failed to read %q: %w", constants.LocationsGeoJSONFile, err)
+		// Zones are optional service; an unusable file must not also take
+		// down the feed's fixed-route data, so it is reported and ignored.
+		result.Warnings = append(result.Warnings, warnings.NewFileWarning(constants.LocationsGeoJSONFile,
+			warnings.LocationsFileInvalid{Reason: err.Error()}))
+		return false, nil
 	}
 	result.Locations = locations
 	result.Warnings = append(result.Warnings, w...)

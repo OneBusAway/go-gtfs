@@ -102,6 +102,9 @@ earlier versions should note:
   versions dropped such rows silently.
 - A row whose `pickup_booking_rule_id` or `drop_off_booking_rule_id` does not resolve
   is kept with a nil booking rule and a `StopTimeInvalidReference` warning.
+- A `locations.geojson` that cannot be read as a FeatureCollection is ignored with a
+  `LocationsFileInvalid` warning; a single unusable Feature is skipped with a
+  `LocationInvalidGeometry` warning. Neither stops the rest of the feed from parsing.
 
 ## Performance
 
