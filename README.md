@@ -100,6 +100,8 @@ earlier versions should note:
 - A `stop_times.txt` row whose `stop_id` is not in `stops.txt` is still skipped, but it
   now produces a `StopTimeInvalidReference` warning in `Static.Warnings`. Earlier
   versions dropped such rows silently.
+- A row whose `pickup_booking_rule_id` or `drop_off_booking_rule_id` does not resolve
+  is kept with a nil booking rule and a `StopTimeInvalidReference` warning.
 
 ## Performance
 
