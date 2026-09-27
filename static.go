@@ -5,6 +5,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"sort"
 	"strconv"
@@ -26,6 +27,13 @@ type Static struct {
 	Services  []Service
 	Trips     []ScheduledTrip
 	Shapes    []Shape
+
+	// Locations is nil when locations.geojson is absent.
+	Locations []Location
+	// LocationGroups is nil when location_groups.txt is absent.
+	LocationGroups []LocationGroup
+	// BookingRules is nil when booking_rules.txt is absent.
+	BookingRules []BookingRule
 
 	// Warnings raised during GTFS static parsing.
 	Warnings []warnings.StaticWarning
@@ -126,11 +134,15 @@ type ScheduledTrip struct {
 	StopTimes            []ScheduledStopTime
 	Shape                *Shape
 	Frequencies          []Frequency
+	// SafeDurationFactor and SafeDurationOffset (GTFS-Flex) scale the
+	// scheduled travel time into a rider-facing upper bound. Nil when absent.
+	SafeDurationFactor *float64
+	SafeDurationOffset *float64
 }
 
 type ScheduledStopTime struct {
 	Trip                  *ScheduledTrip
-	Stop                  *Stop
+	Stop                  *Stop // nil on GTFS-Flex rows that reference a Location or LocationGroup
 	ArrivalTime           time.Duration
 	DepartureTime         time.Duration
 	StopSequence          int
@@ -141,6 +153,29 @@ type ScheduledStopTime struct {
 	ContinuousDropOff     PickupDropOffPolicy
 	ShapeDistanceTraveled *float64
 	ExactTimes            bool
+
+	// GTFS-Flex. Exactly one of Stop, Location and LocationGroup is set.
+	Location                 *Location
+	LocationGroup            *LocationGroup
+	StartPickupDropOffWindow *time.Duration
+	EndPickupDropOffWindow   *time.Duration
+	PickupBookingRule        *BookingRule
+	DropOffBookingRule       *BookingRule
+	// Draft-era placement tolerated for real feeds; the adopted spec puts
+	// these on trips.txt (see ScheduledTrip).
+	SafeDurationFactor *float64
+	SafeDurationOffset *float64
+}
+
+// IsWindowed reports whether the record carries a pickup/drop-off window
+// instead of arrival/departure times.
+func (st ScheduledStopTime) IsWindowed() bool {
+	return st.StartPickupDropOffWindow != nil && st.EndPickupDropOffWindow != nil
+}
+
+// IsFlex reports whether the record is an on-demand (GTFS-Flex) record.
+func (st ScheduledStopTime) IsFlex() bool {
+	return st.IsWindowed() || st.Location != nil || st.LocationGroup != nil
 }
 
 type ShapePoint struct {
@@ -161,6 +196,37 @@ type Frequency struct {
 	ExactTimes ExactTimes
 }
 
+// BookingRule corresponds to a single row in the booking_rules.txt file.
+//
+// Fields that GTFS marks conditionally required are pointers and stay nil when
+// the feed omits them; real feeds do omit them, and consumers decide how to
+// treat the gap.
+type BookingRule struct {
+	Id                     string
+	Type                   BookingType
+	PriorNoticeDurationMin *int32 // minutes
+	PriorNoticeDurationMax *int32 // minutes
+	PriorNoticeLastDay     *int32
+	PriorNoticeLastTime    *time.Duration
+	PriorNoticeStartDay    *int32
+	PriorNoticeStartTime   *time.Duration
+	PriorNoticeServiceId   string
+	Message                string
+	PickupMessage          string
+	DropOffMessage         string
+	PhoneNumber            string
+	InfoUrl                string
+	BookingUrl             string
+}
+
+// LocationGroup corresponds to a single row in the location_groups.txt file
+// with its location_group_stops.txt members resolved.
+type LocationGroup struct {
+	Id    string
+	Name  string
+	Stops []*Stop // resolved members; unknown stop ids are skipped with a warning
+}
+
 type ParseStaticOptions struct {
 	// If true, wheelchair boarding information is inherited from parent station
 	// when unspecified for a child stop/platform, entrance, or exit.
@@ -177,6 +243,10 @@ func ParseStatic(content []byte, opts ParseStaticOptions) (*Static, error) {
 	fileNameToFile := map[constants.StaticFile]*zip.File{}
 	for _, file := range reader.File {
 		fileNameToFile[constants.StaticFile(file.Name)] = file
+	}
+	locationsPresent, err := parseLocationsFile(fileNameToFile[constants.LocationsGeoJSONFile], result)
+	if err != nil {
+		return nil, err
 	}
 	serviceIdToService := map[string]Service{}
 	shapeIdToShape := map[string]*Shape{}
@@ -215,6 +285,23 @@ func ParseStatic(content []byte, opts ParseStaticOptions) (*Static, error) {
 				result.Stops = parseStops(file, opts.InheritWheelchairBoarding)
 				return
 			},
+			// GTFS makes stops.txt optional when locations.geojson defines zones.
+			Optional: locationsPresent,
+		},
+		{
+			File: constants.LocationGroupsFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				result.LocationGroups, w = parseLocationGroups(file)
+				return
+			},
+			Optional: true,
+		},
+		{
+			File: constants.LocationGroupStopsFile,
+			Action: func(file *csv.File) []warnings.StaticWarning {
+				return parseLocationGroupStops(file, result.LocationGroups, result.Stops)
+			},
+			Optional: true,
 		},
 		{
 			File: "calendar.txt",
@@ -249,6 +336,14 @@ func ParseStatic(content []byte, opts ParseStaticOptions) (*Static, error) {
 			Optional: true,
 		},
 		{
+			File: constants.BookingRulesFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				result.BookingRules, w = parseBookingRules(file)
+				return
+			},
+			Optional: true,
+		},
+		{
 			File: "trips.txt",
 			Action: func(file *csv.File) (w []warnings.StaticWarning) {
 				result.Trips = parseScheduledTrips(file, result.Routes, result.Services, shapeIdToShape)
@@ -275,10 +370,9 @@ func ParseStatic(content []byte, opts ParseStaticOptions) (*Static, error) {
 			Optional: true,
 		},
 		{
-			File: "stop_times.txt",
-			Action: func(file *csv.File) (w []warnings.StaticWarning) {
-				parseScheduledStopTimes(file, result.Stops, result.Trips)
-				return
+			File: constants.StopTimesFile,
+			Action: func(file *csv.File) []warnings.StaticWarning {
+				return parseScheduledStopTimes(file, result)
 			},
 		},
 	} {
@@ -286,11 +380,11 @@ func ParseStatic(content []byte, opts ParseStaticOptions) (*Static, error) {
 			table.PostProcess = func() {}
 		}
 		zipFile := fileNameToFile[table.File]
+		if table.Optional && isAbsentOrEmpty(zipFile) {
+			table.PostProcess()
+			continue
+		}
 		if zipFile == nil {
-			if table.Optional {
-				table.PostProcess()
-				continue
-			}
 			return nil, fmt.Errorf("no %q file in GTFS static feed", table.File)
 		}
 		file, err := openCsvFile(table.File, zipFile)
@@ -317,6 +411,46 @@ func openCsvFile(file constants.StaticFile, zipFile *zip.File) (*csv.File, error
 		return nil, err
 	}
 	return f, nil
+}
+
+// isAbsentOrEmpty reports whether an optional feed file should be treated as
+// not provided. A zero-byte file has no header row and is meaningless.
+func isAbsentOrEmpty(zipFile *zip.File) bool {
+	return zipFile == nil || zipFile.UncompressedSize64 == 0
+}
+
+// parseLocationsFile reads locations.geojson, when present and non-empty, into
+// result. It runs before the CSV files because its presence decides whether
+// stops.txt is required. Only the exact name locations.geojson is read. A file
+// that cannot be used at all is reported as a warning and treated as absent.
+func parseLocationsFile(zipFile *zip.File, result *Static) (present bool, err error) {
+	if isAbsentOrEmpty(zipFile) {
+		return false, nil
+	}
+	content, err := readZipFile(zipFile)
+	if err != nil {
+		return false, fmt.Errorf("failed to read %q: %w", constants.LocationsGeoJSONFile, err)
+	}
+	locations, w, err := parseLocations(content)
+	if err != nil {
+		// Zones are optional service; an unusable file must not also take
+		// down the feed's fixed-route data, so it is reported and ignored.
+		result.Warnings = append(result.Warnings, warnings.NewFileWarning(constants.LocationsGeoJSONFile,
+			warnings.LocationsFileInvalid{Reason: err.Error()}))
+		return false, nil
+	}
+	result.Locations = locations
+	result.Warnings = append(result.Warnings, w...)
+	return true, nil
+}
+
+func readZipFile(zipFile *zip.File) ([]byte, error) {
+	reader, err := zipFile.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+	return io.ReadAll(reader)
 }
 
 func parseAgencies(csv *csv.File) ([]Agency, []warnings.StaticWarning) {
@@ -508,6 +642,72 @@ func parseStops(csv *csv.File, inheritWheelchairBoarding bool) []Stop {
 	}
 
 	return stops
+}
+
+func parseLocationGroups(csv *csv.File) ([]LocationGroup, []warnings.StaticWarning) {
+	idColumn := csv.RequiredColumn("location_group_id")
+	nameColumn := csv.OptionalColumn("location_group_name")
+
+	if w := checkForMissingColumns(csv); len(w) > 0 {
+		return nil, w
+	}
+
+	var groups []LocationGroup
+	for csv.NextRow() {
+		id := idColumn.Read()
+		if missingKeys := csv.MissingRowKeys(); len(missingKeys) > 0 {
+			log.Printf("Skipping location group because of missing keys %s", missingKeys)
+			continue
+		}
+		groups = append(groups, LocationGroup{Id: id, Name: nameColumn.Read()})
+	}
+	return groups, nil
+}
+
+// parseLocationGroupStops appends each row's stop to its group's Stops. A row
+// naming an unknown group is logged and skipped (matching how transfers.txt
+// handles dangling ids); a row naming an unknown stop raises a warning.
+func parseLocationGroupStops(csv *csv.File, groups []LocationGroup, stops []Stop) []warnings.StaticWarning {
+	groupIDColumn := csv.RequiredColumn("location_group_id")
+	stopIDColumn := csv.RequiredColumn("stop_id")
+
+	if w := checkForMissingColumns(csv); len(w) > 0 {
+		return w
+	}
+
+	idToGroup := map[string]*LocationGroup{}
+	for i := range groups {
+		idToGroup[groups[i].Id] = &groups[i]
+	}
+	idToStop := map[string]*Stop{}
+	for i := range stops {
+		idToStop[stops[i].Id] = &stops[i]
+	}
+
+	var w []warnings.StaticWarning
+	for csv.NextRow() {
+		groupID := groupIDColumn.Read()
+		stopID := stopIDColumn.Read()
+		if missingKeys := csv.MissingRowKeys(); len(missingKeys) > 0 {
+			log.Printf("Skipping location group stop because of missing keys %s", missingKeys)
+			continue
+		}
+		group := idToGroup[groupID]
+		if group == nil {
+			log.Printf("Skipping location group stop because location group %q is unknown", groupID)
+			continue
+		}
+		stop := idToStop[stopID]
+		if stop == nil {
+			w = append(w, warnings.NewStaticWarning(csv, warnings.LocationGroupUnknownStop{
+				GroupID: groupID,
+				StopID:  stopID,
+			}))
+			continue
+		}
+		group.Stops = append(group.Stops, stop)
+	}
+	return w
 }
 
 func parseFloat64(s string) *float64 {
@@ -712,6 +912,8 @@ func parseScheduledTrips(csv *csv.File, routes []Route, services []Service, shap
 	wheelchairAccessibleColumn := csv.OptionalColumn("wheelchair_accessible")
 	bikesAllowedColumn := csv.OptionalColumn("bikes_allowed")
 	shapeIDColumn := csv.OptionalColumn("shape_id")
+	safeDurationFactorColumn := csv.OptionalColumn("safe_duration_factor")
+	safeDurationOffsetColumn := csv.OptionalColumn("safe_duration_offset")
 
 	if err := csv.MissingRequiredColumns(); err != nil {
 		fmt.Println(err)
@@ -738,6 +940,8 @@ func parseScheduledTrips(csv *csv.File, routes []Route, services []Service, shap
 			BlockID:              blockIDColumn.Read(),
 			WheelchairAccessible: parseWheelchairBoarding(wheelchairAccessibleColumn.Read()),
 			BikesAllowed:         parseBikesAllowed(bikesAllowedColumn.ReadOr("")),
+			SafeDurationFactor:   parseFloat64(safeDurationFactorColumn.Read()),
+			SafeDurationOffset:   parseFloat64(safeDurationOffsetColumn.Read()),
 		}
 
 		shapeIDOrNil := shapeIDColumn.Read()
@@ -766,12 +970,155 @@ func parseScheduledTrips(csv *csv.File, routes []Route, services []Service, shap
 	return trips
 }
 
-func parseScheduledStopTimes(csv *csv.File, stops []Stop, trips []ScheduledTrip) {
-	stopIDColumn := csv.RequiredColumn("stop_id")
-	stopSequenceKey := csv.RequiredColumn("stop_sequence")
+// stopTimeReferences resolves the ids a stop_times.txt row may point at.
+type stopTimeReferences struct {
+	trips        map[string]*ScheduledTrip
+	stops        map[string]*Stop
+	locations    map[string]*Location
+	groups       map[string]*LocationGroup
+	bookingRules map[string]*BookingRule
+}
+
+func newStopTimeReferences(static *Static) stopTimeReferences {
+	refs := stopTimeReferences{
+		trips:        map[string]*ScheduledTrip{},
+		stops:        map[string]*Stop{},
+		locations:    map[string]*Location{},
+		groups:       map[string]*LocationGroup{},
+		bookingRules: map[string]*BookingRule{},
+	}
+	for i := range static.Trips {
+		refs.trips[static.Trips[i].ID] = &static.Trips[i]
+	}
+	for i := range static.Stops {
+		refs.stops[static.Stops[i].Id] = &static.Stops[i]
+	}
+	for i := range static.Locations {
+		refs.locations[static.Locations[i].Id] = &static.Locations[i]
+	}
+	for i := range static.LocationGroups {
+		refs.groups[static.LocationGroups[i].Id] = &static.LocationGroups[i]
+	}
+	for i := range static.BookingRules {
+		refs.bookingRules[static.BookingRules[i].Id] = &static.BookingRules[i]
+	}
+	return refs
+}
+
+// stopTimePlace is the exactly-one-of stop / location / location group that a
+// stop_times.txt row serves.
+type stopTimePlace struct {
+	stop     *Stop
+	location *Location
+	group    *LocationGroup
+}
+
+// resolvePlace enforces GTFS's exactly-one-of rule for stop_id, location_id
+// and location_group_id and resolves the one id given. A non-empty reason
+// means the row must be skipped.
+func (refs stopTimeReferences) resolvePlace(stopID, locationID, groupID string) (stopTimePlace, string) {
+	referenced := 0
+	for _, id := range []string{stopID, locationID, groupID} {
+		if id != "" {
+			referenced++
+		}
+	}
+	if referenced != 1 {
+		return stopTimePlace{}, fmt.Sprintf(
+			"row references %d of stop_id, location_id and location_group_id; exactly one is required", referenced)
+	}
+	var place stopTimePlace
+	switch {
+	case stopID != "":
+		place.stop = refs.stops[stopID]
+		if place.stop == nil {
+			return stopTimePlace{}, fmt.Sprintf("unknown stop_id %q", stopID)
+		}
+	case locationID != "":
+		place.location = refs.locations[locationID]
+		if place.location == nil {
+			return stopTimePlace{}, fmt.Sprintf("unknown location_id %q", locationID)
+		}
+	default:
+		place.group = refs.groups[groupID]
+		if place.group == nil {
+			return stopTimePlace{}, fmt.Sprintf("unknown location_group_id %q", groupID)
+		}
+	}
+	return place, ""
+}
+
+// resolveBookingRule resolves an optional booking rule id. A non-empty reason
+// means the id was given but does not exist.
+func (refs stopTimeReferences) resolveBookingRule(column, id string) (*BookingRule, string) {
+	if id == "" {
+		return nil, ""
+	}
+	rule := refs.bookingRules[id]
+	if rule == nil {
+		return nil, fmt.Sprintf("unknown %s %q", column, id)
+	}
+	return rule, ""
+}
+
+// parsePickupDropOffWindow parses the two window cells of a row. Both empty
+// means "not windowed" (nil pointers, empty reason). Any other invalid
+// combination, including an end before the start, returns the reason the row
+// must be skipped. A zero-length window (start == end) is allowed.
+func parsePickupDropOffWindow(startRaw, endRaw string) (start, end *time.Duration, reason string) {
+	if startRaw == "" && endRaw == "" {
+		return nil, nil, ""
+	}
+	if startRaw == "" || endRaw == "" {
+		return nil, nil, "start_pickup_drop_off_window and end_pickup_drop_off_window must be set together"
+	}
+	startWindow, startOk := parseGtfsTimeToDuration(startRaw)
+	endWindow, endOk := parseGtfsTimeToDuration(endRaw)
+	if !startOk || !endOk {
+		return nil, nil, fmt.Sprintf("unparsable pickup/drop-off window %q-%q", startRaw, endRaw)
+	}
+	if endWindow < startWindow {
+		return nil, nil, fmt.Sprintf("pickup/drop-off window %q-%q ends before it starts", startRaw, endRaw)
+	}
+	return &startWindow, &endWindow, ""
+}
+
+// checkWindowUsage applies the GTFS presence rules that tie windows to the
+// kind of place a row references and to arrival/departure times.
+func checkWindowUsage(windowed bool, place stopTimePlace, arrivalRaw, departureRaw string) string {
+	if windowed && (arrivalRaw != "" || departureRaw != "") {
+		return "arrival_time/departure_time are forbidden on a row with a pickup/drop-off window"
+	}
+	if !windowed && place.stop == nil {
+		return "location_id and location_group_id rows require start/end_pickup_drop_off_window"
+	}
+	return ""
+}
+
+// parseArrivalDeparture parses the two time cells, copying whichever is
+// present into the one that is missing.
+func parseArrivalDeparture(arrivalRaw, departureRaw string) (arrival, departure time.Duration) {
+	arrival, arrivalOk := parseGtfsTimeToDuration(arrivalRaw)
+	departure, departureOk := parseGtfsTimeToDuration(departureRaw)
+	if !departureOk {
+		departure = arrival
+	}
+	if !arrivalOk {
+		arrival = departure
+	}
+	return arrival, departure
+}
+
+func parseScheduledStopTimes(csv *csv.File, static *Static) []warnings.StaticWarning {
 	tripIDColumn := csv.RequiredColumn("trip_id")
+	stopSequenceColumn := csv.RequiredColumn("stop_sequence")
+	stopIDColumn := csv.OptionalColumn("stop_id")
+	locationIDColumn := csv.OptionalColumn("location_id")
+	locationGroupIDColumn := csv.OptionalColumn("location_group_id")
 	arrivalTimeColumn := csv.OptionalColumn("arrival_time")
 	departureTimeColumn := csv.OptionalColumn("departure_time")
+	startWindowColumn := csv.OptionalColumn("start_pickup_drop_off_window")
+	endWindowColumn := csv.OptionalColumn("end_pickup_drop_off_window")
 	stopHeadsignColumn := csv.OptionalColumn("stop_headsign")
 	pickupTypeColumn := csv.OptionalColumn("pickup_type")
 	dropOffTypeColumn := csv.OptionalColumn("drop_off_type")
@@ -779,84 +1126,108 @@ func parseScheduledStopTimes(csv *csv.File, stops []Stop, trips []ScheduledTrip)
 	continuousDropOffColumn := csv.OptionalColumn("continuous_drop_off")
 	shapeDistanceTraveledColumn := csv.OptionalColumn("shape_dist_traveled")
 	timepointColumn := csv.OptionalColumn("timepoint")
-	if err := csv.MissingRequiredColumns(); err != nil {
-		fmt.Println(err)
-		return
+	pickupBookingRuleIDColumn := csv.OptionalColumn("pickup_booking_rule_id")
+	dropOffBookingRuleIDColumn := csv.OptionalColumn("drop_off_booking_rule_id")
+	safeDurationFactorColumn := csv.OptionalColumn("safe_duration_factor")
+	safeDurationOffsetColumn := csv.OptionalColumn("safe_duration_offset")
+	if w := checkForMissingColumns(csv); len(w) > 0 {
+		return w
 	}
 
-	idToStop := map[string]*Stop{}
-	for i := range stops {
-		idToStop[stops[i].Id] = &stops[i]
-	}
-	idToTrip := map[string]*ScheduledTrip{}
-	for i := range trips {
-		idToTrip[trips[i].ID] = &trips[i]
-	}
+	refs := newStopTimeReferences(static)
+	var w []warnings.StaticWarning
 	var currentTrip *ScheduledTrip
-	var currentTripID string
-	var hasNonEmptyShapeDistRow = false
+	hasNonEmptyShapeDistRow := false
 	for csv.NextRow() {
-		arrival, arrivalOk := parseGtfsTimeToDuration(arrivalTimeColumn.Read())
-		departure, departureOk := parseGtfsTimeToDuration(departureTimeColumn.Read())
-
-		if !departureOk {
-			arrival = departure
-		}
-		if !arrivalOk {
-			departure = arrival
-		}
-		if len(shapeDistanceTraveledColumn.Read()) > 0 {
-			hasNonEmptyShapeDistRow = true
-		}
-		stopSequence, err := strconv.Atoi(stopSequenceKey.Read())
-		if err != nil {
-			// TODO: log a warning
+		tripID := tripIDColumn.Read()
+		rawStopSequence := stopSequenceColumn.Read()
+		if missingKeys := csv.MissingRowKeys(); len(missingKeys) > 0 {
+			log.Printf("Skipping stop time because of missing keys %s", missingKeys)
 			continue
 		}
+		stopSequence, err := strconv.Atoi(rawStopSequence)
+		if err != nil {
+			log.Printf("Skipping stop time because stop_sequence %q is not an integer", rawStopSequence)
+			continue
+		}
+		trip := refs.trips[tripID]
+		if trip == nil {
+			log.Printf("Skipping stop time because trip %q is unknown", tripID)
+			continue
+		}
+
+		place, reason := refs.resolvePlace(stopIDColumn.Read(), locationIDColumn.Read(), locationGroupIDColumn.Read())
+		if reason != "" {
+			w = append(w, warnings.NewStaticWarning(csv, warnings.StopTimeInvalidReference{Reason: reason}))
+			continue
+		}
+		startWindow, endWindow, reason := parsePickupDropOffWindow(startWindowColumn.Read(), endWindowColumn.Read())
+		if reason != "" {
+			w = append(w, warnings.NewStaticWarning(csv, warnings.StopTimeInvalidWindow{Reason: reason}))
+			continue
+		}
+		windowed := startWindow != nil
+		arrivalRaw := arrivalTimeColumn.Read()
+		departureRaw := departureTimeColumn.Read()
+		if reason := checkWindowUsage(windowed, place, arrivalRaw, departureRaw); reason != "" {
+			w = append(w, warnings.NewStaticWarning(csv, warnings.StopTimeInvalidWindow{Reason: reason}))
+			continue
+		}
+		// A booking rule only adds rider information, so an unresolvable id
+		// keeps the row (with no rule) rather than dropping the service.
+		pickupRule, reason := refs.resolveBookingRule("pickup_booking_rule_id", pickupBookingRuleIDColumn.Read())
+		if reason != "" {
+			w = append(w, warnings.NewStaticWarning(csv, warnings.StopTimeInvalidReference{Reason: reason}))
+		}
+		dropOffRule, reason := refs.resolveBookingRule("drop_off_booking_rule_id", dropOffBookingRuleIDColumn.Read())
+		if reason != "" {
+			w = append(w, warnings.NewStaticWarning(csv, warnings.StopTimeInvalidReference{Reason: reason}))
+		}
+
+		arrival, departure := parseArrivalDeparture(arrivalRaw, departureRaw)
+		if shapeDistanceTraveledColumn.Read() != "" {
+			hasNonEmptyShapeDistRow = true
+		}
 		stopTime := ScheduledStopTime{
-			Stop:                  idToStop[stopIDColumn.Read()],
+			Stop:                  place.stop,
+			Location:              place.location,
+			LocationGroup:         place.group,
 			Headsign:              stopHeadsignColumn.Read(),
 			ArrivalTime:           arrival,
-			StopSequence:          stopSequence,
 			DepartureTime:         departure,
+			StopSequence:          stopSequence,
 			PickupType:            parsePickupDropOffPolicyOrYes(pickupTypeColumn.Read()),
 			DropOffType:           parsePickupDropOffPolicyOrYes(dropOffTypeColumn.Read()),
 			ContinuousPickup:      parsePickupDropOffPolicy(continuousPickupColumn.ReadOr("")),
 			ContinuousDropOff:     parsePickupDropOffPolicy(continuousDropOffColumn.ReadOr("")),
 			ShapeDistanceTraveled: parseFloat64(shapeDistanceTraveledColumn.Read()),
-			ExactTimes:            timepointColumn.ReadOr("1") != "0",
+			// A windowed record has no exact time whatever timepoint says.
+			ExactTimes:               !windowed && timepointColumn.ReadOr("1") != "0",
+			StartPickupDropOffWindow: startWindow,
+			EndPickupDropOffWindow:   endWindow,
+			PickupBookingRule:        pickupRule,
+			DropOffBookingRule:       dropOffRule,
+			SafeDurationFactor:       parseFloat64(safeDurationFactorColumn.Read()),
+			SafeDurationOffset:       parseFloat64(safeDurationOffsetColumn.Read()),
 		}
-		tripID := tripIDColumn.Read()
-		if currentTrip == nil || currentTripID != tripID {
-			thisTrip := idToTrip[tripID]
-			if currentTrip != nil && cap(thisTrip.StopTimes) == 0 {
-				thisTrip.StopTimes = make([]ScheduledStopTime, 0, len(currentTrip.StopTimes))
+
+		if trip != currentTrip {
+			// Presize the new trip's slice from the previous trip's length; trips
+			// on the same route usually have similar stop counts.
+			if currentTrip != nil && cap(trip.StopTimes) == 0 {
+				trip.StopTimes = make([]ScheduledStopTime, 0, len(currentTrip.StopTimes))
 			}
-			currentTrip = thisTrip
-			currentTripID = tripID
+			currentTrip = trip
 		}
-		if missingKeys := csv.MissingRowKeys(); len(missingKeys) > 0 {
-			log.Printf("Skipping stop time because of missing keys %s", missingKeys)
-			continue
-		}
-		if stopTime.Stop == nil {
-			continue
-		}
-		if currentTrip == nil {
-			continue
-		}
-		currentTrip.StopTimes = append(currentTrip.StopTimes, stopTime)
+		trip.StopTimes = append(trip.StopTimes, stopTime)
 	}
-	for _, trip := range idToTrip {
+	for _, trip := range refs.trips {
 		sort.Slice(trip.StopTimes, func(i, j int) bool {
 			return trip.StopTimes[i].StopSequence < trip.StopTimes[j].StopSequence
 		})
-		if hasNonEmptyShapeDistRow {
-			trip.StopTimes = interpolateStopTimesByShapeDist(trip.StopTimes)
-		} else {
-			trip.StopTimes = interpolateStopTimes(trip.StopTimes)
-		}
+		trip.StopTimes = interpolateTimedStopTimes(trip.StopTimes, hasNonEmptyShapeDistRow)
 	}
+	return w
 }
 
 func parseGtfsTimeToDuration(s string) (time.Duration, bool) {
@@ -883,6 +1254,78 @@ func parseGtfsTimeToDuration(s string) (time.Duration, bool) {
 	minutes := pieces[1]
 	seconds := pieces[2]
 	return time.Duration((hours*60+minutes)*60+seconds) * time.Second, true
+}
+
+// parseOptionalGtfsTime parses an optional HH:MM:SS cell; nil when the cell is
+// empty or unparsable.
+func parseOptionalGtfsTime(s string) *time.Duration {
+	d, ok := parseGtfsTimeToDuration(s)
+	if !ok {
+		return nil
+	}
+	return &d
+}
+
+func parseBookingRules(csv *csv.File) ([]BookingRule, []warnings.StaticWarning) {
+	idColumn := csv.RequiredColumn("booking_rule_id")
+	typeColumn := csv.RequiredColumn("booking_type")
+	durationMinColumn := csv.OptionalColumn("prior_notice_duration_min")
+	durationMaxColumn := csv.OptionalColumn("prior_notice_duration_max")
+	lastDayColumn := csv.OptionalColumn("prior_notice_last_day")
+	lastTimeColumn := csv.OptionalColumn("prior_notice_last_time")
+	startDayColumn := csv.OptionalColumn("prior_notice_start_day")
+	startTimeColumn := csv.OptionalColumn("prior_notice_start_time")
+	serviceIDColumn := csv.OptionalColumn("prior_notice_service_id")
+	messageColumn := csv.OptionalColumn("message")
+	pickupMessageColumn := csv.OptionalColumn("pickup_message")
+	dropOffMessageColumn := csv.OptionalColumn("drop_off_message")
+	phoneNumberColumn := csv.OptionalColumn("phone_number")
+	infoUrlColumn := csv.OptionalColumn("info_url")
+	bookingUrlColumn := csv.OptionalColumn("booking_url")
+
+	if w := checkForMissingColumns(csv); len(w) > 0 {
+		return nil, w
+	}
+
+	var w []warnings.StaticWarning
+	var rules []BookingRule
+	for csv.NextRow() {
+		id := idColumn.Read()
+		rawType := typeColumn.Read()
+		if missingKeys := csv.MissingRowKeys(); len(missingKeys) > 0 {
+			w = append(w, warnings.NewStaticWarning(csv, warnings.BookingRuleInvalid{
+				BookingRuleID: id,
+				Reason:        fmt.Sprintf("missing values %s", missingKeys),
+			}))
+			continue
+		}
+		bookingType, ok := parseBookingType(rawType)
+		if !ok {
+			w = append(w, warnings.NewStaticWarning(csv, warnings.BookingRuleInvalid{
+				BookingRuleID: id,
+				Reason:        fmt.Sprintf("unparsable booking_type %q", rawType),
+			}))
+			continue
+		}
+		rules = append(rules, BookingRule{
+			Id:                     id,
+			Type:                   bookingType,
+			PriorNoticeDurationMin: parseInt32(durationMinColumn.Read()),
+			PriorNoticeDurationMax: parseInt32(durationMaxColumn.Read()),
+			PriorNoticeLastDay:     parseInt32(lastDayColumn.Read()),
+			PriorNoticeLastTime:    parseOptionalGtfsTime(lastTimeColumn.Read()),
+			PriorNoticeStartDay:    parseInt32(startDayColumn.Read()),
+			PriorNoticeStartTime:   parseOptionalGtfsTime(startTimeColumn.Read()),
+			PriorNoticeServiceId:   serviceIDColumn.Read(),
+			Message:                messageColumn.Read(),
+			PickupMessage:          pickupMessageColumn.Read(),
+			DropOffMessage:         dropOffMessageColumn.Read(),
+			PhoneNumber:            phoneNumberColumn.Read(),
+			InfoUrl:                infoUrlColumn.Read(),
+			BookingUrl:             bookingUrlColumn.Read(),
+		})
+	}
+	return rules, w
 }
 
 type ShapeRow struct {

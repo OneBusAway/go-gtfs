@@ -30,8 +30,28 @@ func NewStaticWarning(csvFile *csv.File, kind StaticWarningKind) StaticWarning {
 		Kind:          kind,
 		File:          csvFile.Name(),
 		RowNumber:     csvFile.RowNumber(),
-		RowContent:    csvFile.RowContent(),
+		RowContent:    copyRow(csvFile.RowContent()),
 		HeaderContent: csvFile.HeaderContent(),
+	}
+}
+
+// copyRow detaches a row from the csv.File, which reuses its row storage
+// when it reads the next row.
+func copyRow(row []string) []string {
+	if row == nil {
+		return nil
+	}
+	copied := make([]string, len(row))
+	copy(copied, row)
+	return copied
+}
+
+// NewFileWarning builds a warning for a file that is not CSV, such as
+// locations.geojson, where there is no row to point at.
+func NewFileWarning(file constants.StaticFile, kind StaticWarningKind) StaticWarning {
+	return StaticWarning{
+		Kind: kind,
+		File: file,
 	}
 }
 
@@ -60,4 +80,68 @@ type AgencyMissingValues struct {
 
 func (w AgencyMissingValues) Error() string {
 	return fmt.Sprintf("agency %q is missing values %s", w.AgencyID, w.Columns)
+}
+
+// StopTimeInvalidReference is raised when a stop_times.txt row does not
+// reference exactly one of stop_id, location_id and location_group_id, or
+// references an id (including a booking rule id) that does not resolve.
+type StopTimeInvalidReference struct {
+	Reason string
+}
+
+func (w StopTimeInvalidReference) Error() string {
+	return fmt.Sprintf("stop time has an invalid reference: %s", w.Reason)
+}
+
+// StopTimeInvalidWindow is raised when a stop_times.txt row's
+// start/end_pickup_drop_off_window pair violates the GTFS presence rules.
+type StopTimeInvalidWindow struct {
+	Reason string
+}
+
+func (w StopTimeInvalidWindow) Error() string {
+	return fmt.Sprintf("stop time has an invalid pickup/drop-off window: %s", w.Reason)
+}
+
+// LocationGroupUnknownStop is raised when location_group_stops.txt names a
+// stop that stops.txt does not define.
+type LocationGroupUnknownStop struct {
+	GroupID string
+	StopID  string
+}
+
+func (w LocationGroupUnknownStop) Error() string {
+	return fmt.Sprintf("location group %q references unknown stop %q", w.GroupID, w.StopID)
+}
+
+// LocationInvalidGeometry is raised when a locations.geojson Feature cannot be
+// used: no id, no geometry, an unsupported geometry type or malformed
+// coordinates.
+type LocationInvalidGeometry struct {
+	LocationID string
+	Reason     string
+}
+
+func (w LocationInvalidGeometry) Error() string {
+	return fmt.Sprintf("location %q has invalid geometry: %s", w.LocationID, w.Reason)
+}
+
+// LocationsFileInvalid is raised when locations.geojson as a whole cannot be
+// used (malformed JSON, or not a FeatureCollection). The file is ignored.
+type LocationsFileInvalid struct {
+	Reason string
+}
+
+func (w LocationsFileInvalid) Error() string {
+	return fmt.Sprintf("locations.geojson is invalid and was ignored: %s", w.Reason)
+}
+
+// BookingRuleInvalid is raised when a booking_rules.txt row is skipped.
+type BookingRuleInvalid struct {
+	BookingRuleID string
+	Reason        string
+}
+
+func (w BookingRuleInvalid) Error() string {
+	return fmt.Sprintf("booking rule %q is invalid: %s", w.BookingRuleID, w.Reason)
 }

@@ -52,7 +52,7 @@ Below is a list of the GTFS schedule files and whether they are currently suppor
 | File Name                                                                                              | Supported | Required by Spec        | Notes                                                       |
 | ------------------------------------------------------------------------------------------------------ | --------- | ----------------------- | ----------------------------------------------------------- |
 | [agency.txt](https://gtfs.org/documentation/schedule/reference/#agencytxt)                             | ✅        | Required                |                                                             |
-| [stops.txt](https://gtfs.org/documentation/schedule/reference/#stopstxt)                               | ✅        | Conditionally Required  | Always required by library                                  |
+| [stops.txt](https://gtfs.org/documentation/schedule/reference/#stopstxt)                               | ✅        | Conditionally Required  | Optional only when locations.geojson is present              |
 | [routes.txt](https://gtfs.org/documentation/schedule/reference/#routestxt)                             | ✅        | Required                |                                                             |
 | [trips.txt](https://gtfs.org/documentation/schedule/reference/#tripstxt)                               | ✅        | Required                |                                                             |
 | [stop_times.txt](https://gtfs.org/documentation/schedule/reference/#stop_timestxt)                     | ✅        | Required                |                                                             |
@@ -70,18 +70,41 @@ Below is a list of the GTFS schedule files and whether they are currently suppor
 | [stop_areas.txt](https://gtfs.org/documentation/schedule/reference/#stop_areastxt)                     | ❌        | Optional                |                                                             |
 | [networks.txt](https://gtfs.org/documentation/schedule/reference/#networkstxt)                         | ❌        | Conditionally Forbidden |                                                             |
 | [route_networks.txt](https://gtfs.org/documentation/schedule/reference/#route_networkstxt)             | ❌        | Conditionally Forbidden |                                                             |
-| [location_groups.txt](https://gtfs.org/documentation/schedule/reference/#location_groupstxt)           | ❌        | Conditionally Forbidden |                                                             |
+| [location_groups.txt](https://gtfs.org/documentation/schedule/reference/#location_groupstxt)           | ✅        | Optional                |                                                             |
 | [shapes.txt](https://gtfs.org/documentation/schedule/reference/#shapestxt)                             | ✅        | Optional                |                                                             |
 | [frequencies.txt](https://gtfs.org/documentation/schedule/reference/#frequenciestxt)                   | ✅        | Optional                |                                                             |
 | [transfers.txt](https://gtfs.org/documentation/schedule/reference/#transferstxt)                       | 🟨        | Optional                | Partially implemented                                       |
 | [pathways.txt](https://gtfs.org/documentation/schedule/reference/#pathwaystxt)                         | ❌        | Optional                |                                                             |
 | [levels.txt](https://gtfs.org/documentation/schedule/reference/#levelstxt)                             | ❌        | Conditionally Required  |                                                             |
-| [location_group_stops.txt](https://gtfs.org/documentation/schedule/reference/#location_group_stopstxt) | ❌        | Optional                |                                                             |
-| [locations.geojson](https://gtfs.org/documentation/schedule/reference/#locationsgeojson)               | ❌        | Optional                |                                                             |
-| [booking_rules.txt](https://gtfs.org/documentation/schedule/reference/#booking_rulestxt)               | ❌        | Optional                |                                                             |
+| [location_group_stops.txt](https://gtfs.org/documentation/schedule/reference/#location_group_stopstxt) | ✅        | Optional                |                                                             |
+| [locations.geojson](https://gtfs.org/documentation/schedule/reference/#locationsgeojson)               | ✅        | Optional                | Polygon and MultiPolygon only                               |
+| [booking_rules.txt](https://gtfs.org/documentation/schedule/reference/#booking_rulestxt)               | ✅        | Optional                |                                                             |
 | [translations.txt](https://gtfs.org/documentation/schedule/reference/#translationstxt)                 | ❌        | Optional                |                                                             |
 | [feed_info.txt](https://gtfs.org/documentation/schedule/reference/#feed_infotxt)                       | ❌        | Conditionally Required  |                                                             |
 | [attributions.txt](https://gtfs.org/documentation/schedule/reference/#attributionstxt)                 | ❌        | Optional                |                                                             |
+
+## GTFS-Flex and upgrading
+
+Feeds that use [GTFS-Flex](https://gtfs.org/community/extensions/flex/) now parse into
+`Static.Locations`, `Static.LocationGroups` and `Static.BookingRules`, and their
+`stop_times.txt` rows appear on trips alongside ordinary ones. Code written against
+earlier versions should note:
+
+- `ScheduledStopTime.Stop` may be nil. A flex row references a `Location` or a
+  `LocationGroup` instead; exactly one of `Stop`, `Location` and `LocationGroup` is set.
+- A windowed row (one with `StartPickupDropOffWindow`/`EndPickupDropOffWindow`) has
+  zero `ArrivalTime` and `DepartureTime` and `ExactTimes == false`. Interpolation
+  leaves these rows alone.
+- Code that expects fixed-stop, fixed-time service should skip flex rows with
+  `IsFlex()`, or only windowed rows with `IsWindowed()`.
+- A `stop_times.txt` row whose `stop_id` is not in `stops.txt` is still skipped, but it
+  now produces a `StopTimeInvalidReference` warning in `Static.Warnings`. Earlier
+  versions dropped such rows silently.
+- A row whose `pickup_booking_rule_id` or `drop_off_booking_rule_id` does not resolve
+  is kept with a nil booking rule and a `StopTimeInvalidReference` warning.
+- A `locations.geojson` that cannot be read as a FeatureCollection is ignored with a
+  `LocationsFileInvalid` warning; a single unusable Feature is skipped with a
+  `LocationInvalidGeometry` warning. Neither stops the rest of the feed from parsing.
 
 ## Performance
 

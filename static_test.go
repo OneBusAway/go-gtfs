@@ -3,6 +3,7 @@ package gtfs
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/json"
 	"io"
 	"strings"
 	"testing"
@@ -498,6 +499,552 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
+			desc: "booking rules with all fields",
+			content: newZipBuilder().add(
+				"booking_rules.txt",
+				"booking_rule_id,booking_type,prior_notice_duration_min,prior_notice_duration_max,"+
+					"prior_notice_last_day,prior_notice_last_time,prior_notice_start_day,prior_notice_start_time,"+
+					"prior_notice_service_id,message,pickup_message,drop_off_message,phone_number,info_url,booking_url",
+				"br_1,2,,,1,17:00:00,14,00:00:00,weekdays,msg,pmsg,dmsg,555-0100,https://info.example,https://book.example",
+				"br_2,1,60,1440,,,,,,,,,,,",
+			).build(),
+			expected: &Static{
+				BookingRules: []BookingRule{
+					{
+						Id:                   "br_1",
+						Type:                 BookingType_PriorDays,
+						PriorNoticeLastDay:   ptr(int32(1)),
+						PriorNoticeLastTime:  ptr(17 * time.Hour),
+						PriorNoticeStartDay:  ptr(int32(14)),
+						PriorNoticeStartTime: ptr(time.Duration(0)),
+						PriorNoticeServiceId: "weekdays",
+						Message:              "msg",
+						PickupMessage:        "pmsg",
+						DropOffMessage:       "dmsg",
+						PhoneNumber:          "555-0100",
+						InfoUrl:              "https://info.example",
+						BookingUrl:           "https://book.example",
+					},
+					{
+						Id:                     "br_2",
+						Type:                   BookingType_SameDay,
+						PriorNoticeDurationMin: ptr(int32(60)),
+						PriorNoticeDurationMax: ptr(int32(1440)),
+					},
+				},
+			},
+		},
+		{
+			// Real Michigan feeds omit prior_notice_duration_min on type 1 and
+			// prior_notice_last_time on type 2. Import them with nils (spec §9.4).
+			desc: "booking rules missing conditionally required fields",
+			content: newZipBuilder().add(
+				"booking_rules.txt",
+				"booking_rule_id,booking_type,prior_notice_duration_min,prior_notice_last_day,prior_notice_last_time",
+				"br_same_day,1,,,",
+				"br_prior_days,2,,7,",
+			).build(),
+			expected: &Static{
+				BookingRules: []BookingRule{
+					{Id: "br_same_day", Type: BookingType_SameDay},
+					{Id: "br_prior_days", Type: BookingType_PriorDays, PriorNoticeLastDay: ptr(int32(7))},
+				},
+			},
+		},
+		{
+			desc: "booking rule with unparsable time is kept with a nil time",
+			content: newZipBuilder().add(
+				"booking_rules.txt",
+				"booking_rule_id,booking_type,prior_notice_last_time",
+				"br_1,2,soon",
+			).build(),
+			expected: &Static{
+				BookingRules: []BookingRule{{Id: "br_1", Type: BookingType_PriorDays}},
+			},
+		},
+		{
+			desc: "booking rule with whitespace-padded type is kept",
+			content: newZipBuilder().add(
+				"booking_rules.txt",
+				"booking_rule_id,booking_type",
+				"br_1, 1 ",
+			).build(),
+			expected: &Static{
+				BookingRules: []BookingRule{{Id: "br_1", Type: BookingType_SameDay}},
+			},
+		},
+		{
+			desc: "booking rule with unparsable type is skipped",
+			content: newZipBuilder().add(
+				"booking_rules.txt",
+				"booking_rule_id,booking_type",
+				"br_ok,0",
+				"br_bad,9",
+			).build(),
+			expected: &Static{
+				BookingRules: []BookingRule{{Id: "br_ok", Type: BookingType_RealTime}},
+				Warnings: []warnings.StaticWarning{
+					{
+						Kind:          warnings.BookingRuleInvalid{BookingRuleID: "br_bad", Reason: `unparsable booking_type "9"`},
+						File:          constants.BookingRulesFile,
+						RowNumber:     2,
+						RowContent:    []string{"br_bad", "9"},
+						HeaderContent: []string{"booking_rule_id", "booking_type"},
+					},
+				},
+			},
+		},
+		{
+			desc: "booking rule with missing id is skipped",
+			content: newZipBuilder().add(
+				"booking_rules.txt",
+				"booking_rule_id,booking_type",
+				",1",
+			).build(),
+			expected: &Static{
+				Warnings: []warnings.StaticWarning{
+					{
+						Kind:          warnings.BookingRuleInvalid{BookingRuleID: "", Reason: "missing values [booking_rule_id]"},
+						File:          constants.BookingRulesFile,
+						RowNumber:     1,
+						RowContent:    []string{"", "1"},
+						HeaderContent: []string{"booking_rule_id", "booking_type"},
+					},
+				},
+			},
+		},
+		{
+			desc: "booking rules file with missing columns",
+			content: newZipBuilder().add(
+				"booking_rules.txt",
+				"booking_rule_id\nbr_1",
+			).build(),
+			expected: &Static{
+				Warnings: []warnings.StaticWarning{
+					{
+						Kind:          warnings.MissingColumns{Columns: []string{"booking_type"}},
+						File:          constants.BookingRulesFile,
+						RowNumber:     0,
+						RowContent:    []string{"booking_rule_id"},
+						HeaderContent: []string{"booking_rule_id"},
+					},
+				},
+			},
+		},
+		{
+			desc: "header-only booking rules file yields nil",
+			content: newZipBuilder().add(
+				"booking_rules.txt",
+				"booking_rule_id,booking_type",
+			).build(),
+			expected: &Static{},
+		},
+		{
+			desc: "locations.geojson polygon",
+			content: newZipBuilder().add(
+				"locations.geojson",
+				`{"type":"FeatureCollection","features":[{"type":"Feature","id":"zone_a",`+
+					`"properties":{"stop_name":"Zone A","stop_desc":"North side"},`+
+					`"geometry":{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}}]}`,
+			).build(),
+			expected: &Static{
+				Locations: []Location{
+					{
+						Id:          "zone_a",
+						Name:        "Zone A",
+						Description: "North side",
+						Geometry: LocationGeometry{
+							Type:     "Polygon",
+							Polygons: [][][][2]float64{{{{0, 0}, {1, 0}, {1, 1}, {0, 0}}}},
+							Raw:      json.RawMessage(`{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}`),
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "locations.geojson multipolygon with a hole",
+			content: newZipBuilder().add(
+				"locations.geojson",
+				`{"type":"FeatureCollection","features":[{"type":"Feature","id":"zone_m","properties":{},`+
+					`"geometry":{"type":"MultiPolygon","coordinates":[`+
+					`[[[0,0],[4,0],[4,4],[0,0]],[[1,1],[2,1],[2,2],[1,1]]],`+
+					`[[[10,10],[11,10],[11,11],[10,10]]]]}}]}`,
+			).build(),
+			expected: &Static{
+				Locations: []Location{
+					{
+						Id: "zone_m",
+						Geometry: LocationGeometry{
+							Type: "MultiPolygon",
+							Polygons: [][][][2]float64{
+								{{{0, 0}, {4, 0}, {4, 4}, {0, 0}}, {{1, 1}, {2, 1}, {2, 2}, {1, 1}}},
+								{{{10, 10}, {11, 10}, {11, 11}, {10, 10}}},
+							},
+							Raw: json.RawMessage(`{"type":"MultiPolygon","coordinates":[` +
+								`[[[0,0],[4,0],[4,4],[0,0]],[[1,1],[2,1],[2,2],[1,1]]],` +
+								`[[[10,10],[11,10],[11,11],[10,10]]]]}`),
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "locations.geojson numeric feature id",
+			content: newZipBuilder().add(
+				"locations.geojson",
+				`{"type":"FeatureCollection","features":[{"type":"Feature","id":42,"properties":{},`+
+					`"geometry":{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}}]}`,
+			).build(),
+			expected: &Static{
+				Locations: []Location{
+					{
+						Id: "42",
+						Geometry: LocationGeometry{
+							Type:     "Polygon",
+							Polygons: [][][][2]float64{{{{0, 0}, {1, 0}, {1, 1}, {0, 0}}}},
+							Raw:      json.RawMessage(`{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}`),
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "locations.geojson id falls back to properties",
+			content: newZipBuilder().add(
+				"locations.geojson",
+				`{"type":"FeatureCollection","features":[`+
+					`{"type":"Feature","properties":{"id":"from_props"},`+
+					`"geometry":{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}},`+
+					`{"type":"Feature","properties":{"location_id":"from_draft"},`+
+					`"geometry":{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}}]}`,
+			).build(),
+			expected: &Static{
+				Locations: []Location{
+					{
+						Id: "from_props",
+						Geometry: LocationGeometry{
+							Type:     "Polygon",
+							Polygons: [][][][2]float64{{{{0, 0}, {1, 0}, {1, 1}, {0, 0}}}},
+							Raw:      json.RawMessage(`{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}`),
+						},
+					},
+					{
+						Id: "from_draft",
+						Geometry: LocationGeometry{
+							Type:     "Polygon",
+							Polygons: [][][][2]float64{{{{0, 0}, {1, 0}, {1, 1}, {0, 0}}}},
+							Raw:      json.RawMessage(`{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}`),
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "locations.geojson altitude is dropped",
+			content: newZipBuilder().add(
+				"locations.geojson",
+				`{"type":"FeatureCollection","features":[{"type":"Feature","id":"z","properties":{},`+
+					`"geometry":{"type":"Polygon","coordinates":[[[0,0,5],[1,0,5],[1,1,5],[0,0,5]]]}}]}`,
+			).build(),
+			expected: &Static{
+				Locations: []Location{
+					{
+						Id: "z",
+						Geometry: LocationGeometry{
+							Type:     "Polygon",
+							Polygons: [][][][2]float64{{{{0, 0}, {1, 0}, {1, 1}, {0, 0}}}},
+							Raw:      json.RawMessage(`{"type":"Polygon","coordinates":[[[0,0,5],[1,0,5],[1,1,5],[0,0,5]]]}`),
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "locations.geojson BOM is stripped",
+			content: newZipBuilder().add(
+				"locations.geojson",
+				"\xef\xbb\xbf"+`{"type":"FeatureCollection","features":[{"type":"Feature","id":"z","properties":{},`+
+					`"geometry":{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}}]}`,
+			).build(),
+			expected: &Static{
+				Locations: []Location{
+					{
+						Id: "z",
+						Geometry: LocationGeometry{
+							Type:     "Polygon",
+							Polygons: [][][][2]float64{{{{0, 0}, {1, 0}, {1, 1}, {0, 0}}}},
+							Raw:      json.RawMessage(`{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}`),
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "locations.geojson unsupported geometry warns",
+			content: newZipBuilder().add(
+				"locations.geojson",
+				`{"type":"FeatureCollection","features":[{"type":"Feature","id":"pt","properties":{},`+
+					`"geometry":{"type":"Point","coordinates":[0,0]}}]}`,
+			).build(),
+			expected: &Static{
+				Warnings: []warnings.StaticWarning{
+					warnings.NewFileWarning(constants.LocationsGeoJSONFile, warnings.LocationInvalidGeometry{
+						LocationID: "pt",
+						Reason:     `unsupported geometry type "Point"`,
+					}),
+				},
+			},
+		},
+		{
+			desc: "locations.geojson null geometry warns",
+			content: newZipBuilder().add(
+				"locations.geojson",
+				`{"type":"FeatureCollection","features":[`+
+					`{"type":"Feature","id":"null_geom","properties":{},"geometry":null},`+
+					`{"type":"Feature","id":"no_geom","properties":{}}]}`,
+			).build(),
+			expected: &Static{
+				Warnings: []warnings.StaticWarning{
+					warnings.NewFileWarning(constants.LocationsGeoJSONFile, warnings.LocationInvalidGeometry{
+						LocationID: "null_geom",
+						Reason:     "feature has no geometry",
+					}),
+					warnings.NewFileWarning(constants.LocationsGeoJSONFile, warnings.LocationInvalidGeometry{
+						LocationID: "no_geom",
+						Reason:     "feature has no geometry",
+					}),
+				},
+			},
+		},
+		{
+			desc: "locations.geojson polygon with no rings warns",
+			content: newZipBuilder().add(
+				"locations.geojson",
+				`{"type":"FeatureCollection","features":[{"type":"Feature","id":"empty","properties":{},`+
+					`"geometry":{"type":"Polygon","coordinates":[]}}]}`,
+			).build(),
+			expected: &Static{
+				Warnings: []warnings.StaticWarning{
+					warnings.NewFileWarning(constants.LocationsGeoJSONFile, warnings.LocationInvalidGeometry{
+						LocationID: "empty",
+						Reason:     "polygon has no rings",
+					}),
+				},
+			},
+		},
+		{
+			desc: "locations.geojson degenerate exterior rings warn",
+			content: newZipBuilder().add(
+				"locations.geojson",
+				`{"type":"FeatureCollection","features":[`+
+					`{"type":"Feature","id":"empty_ring","properties":{},`+
+					`"geometry":{"type":"Polygon","coordinates":[[]]}},`+
+					`{"type":"Feature","id":"empty_multi_ring","properties":{},`+
+					`"geometry":{"type":"MultiPolygon","coordinates":[[[]]]}},`+
+					`{"type":"Feature","id":"two_points","properties":{},`+
+					`"geometry":{"type":"Polygon","coordinates":[[[0,0],[1,1]]]}}]}`,
+			).build(),
+			expected: &Static{
+				Warnings: []warnings.StaticWarning{
+					warnings.NewFileWarning(constants.LocationsGeoJSONFile, warnings.LocationInvalidGeometry{
+						LocationID: "empty_ring",
+						Reason:     "exterior ring has 0 positions; at least 4 are required",
+					}),
+					warnings.NewFileWarning(constants.LocationsGeoJSONFile, warnings.LocationInvalidGeometry{
+						LocationID: "empty_multi_ring",
+						Reason:     "exterior ring has 0 positions; at least 4 are required",
+					}),
+					warnings.NewFileWarning(constants.LocationsGeoJSONFile, warnings.LocationInvalidGeometry{
+						LocationID: "two_points",
+						Reason:     "exterior ring has 2 positions; at least 4 are required",
+					}),
+				},
+			},
+		},
+		{
+			desc: "locations.geojson degenerate hole is dropped with a warning",
+			content: newZipBuilder().add(
+				"locations.geojson",
+				`{"type":"FeatureCollection","features":[{"type":"Feature","id":"holed","properties":{},`+
+					`"geometry":{"type":"Polygon","coordinates":[[[0,0],[4,0],[4,4],[0,0]],[[1,1],[2,2]]]}}]}`,
+			).build(),
+			expected: &Static{
+				Locations: []Location{
+					{
+						Id: "holed",
+						Geometry: LocationGeometry{
+							Type:     "Polygon",
+							Polygons: [][][][2]float64{{{{0, 0}, {4, 0}, {4, 4}, {0, 0}}}},
+							Raw:      json.RawMessage(`{"type":"Polygon","coordinates":[[[0,0],[4,0],[4,4],[0,0]],[[1,1],[2,2]]]}`),
+						},
+					},
+				},
+				Warnings: []warnings.StaticWarning{
+					warnings.NewFileWarning(constants.LocationsGeoJSONFile, warnings.LocationInvalidGeometry{
+						LocationID: "holed",
+						Reason:     "dropped hole with 2 positions; at least 4 are required",
+					}),
+				},
+			},
+		},
+		{
+			desc: "locations.geojson feature without id warns",
+			content: newZipBuilder().add(
+				"locations.geojson",
+				`{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},`+
+					`"geometry":{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}}]}`,
+			).build(),
+			expected: &Static{
+				Warnings: []warnings.StaticWarning{
+					warnings.NewFileWarning(constants.LocationsGeoJSONFile, warnings.LocationInvalidGeometry{
+						Reason: "feature has no id",
+					}),
+				},
+			},
+		},
+		{
+			desc: "location.geojson (singular) is ignored",
+			content: newZipBuilder().add(
+				"location.geojson",
+				`{"type":"FeatureCollection","features":[{"type":"Feature","id":"z","properties":{},`+
+					`"geometry":{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}}]}`,
+			).build(),
+			expected: &Static{},
+		},
+		{
+			desc: "zero-byte locations.geojson is treated as absent",
+			content: newZipBuilder().add(
+				"locations.geojson", "",
+			).build(),
+			expected: &Static{},
+		},
+		{
+			desc: "stops.txt is optional when locations.geojson is present",
+			content: newZipBuilder().remove("stops.txt").add(
+				"locations.geojson",
+				`{"type":"FeatureCollection","features":[{"type":"Feature","id":"z","properties":{},`+
+					`"geometry":{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}}]}`,
+			).build(),
+			expected: &Static{
+				Locations: []Location{
+					{
+						Id: "z",
+						Geometry: LocationGeometry{
+							Type:     "Polygon",
+							Polygons: [][][][2]float64{{{{0, 0}, {1, 0}, {1, 1}, {0, 0}}}},
+							Raw:      json.RawMessage(`{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}`),
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "location groups with resolved members",
+			content: newZipBuilder().add(
+				"stops.txt",
+				"stop_id\nstop_id\nstop_2",
+			).add(
+				"location_groups.txt",
+				"location_group_id,location_group_name",
+				"g1,Group One",
+				"g2,",
+			).add(
+				"location_group_stops.txt",
+				"location_group_id,stop_id",
+				"g1,stop_id",
+				"g1,stop_2",
+				"g2,stop_2",
+			).build(),
+			expected: &Static{
+				Stops: []Stop{defaultStop, {Id: "stop_2"}},
+				LocationGroups: []LocationGroup{
+					{Id: "g1", Name: "Group One", Stops: []*Stop{&defaultStop, {Id: "stop_2"}}},
+					{Id: "g2", Stops: []*Stop{{Id: "stop_2"}}},
+				},
+			},
+		},
+		{
+			desc: "location group with unknown stop warns",
+			content: newZipBuilder().add(
+				"stops.txt",
+				"stop_id\nstop_id",
+			).add(
+				"location_groups.txt",
+				"location_group_id\ng1",
+			).add(
+				"location_group_stops.txt",
+				"location_group_id,stop_id",
+				"g1,stop_id",
+				"g1,nope",
+			).build(),
+			expected: &Static{
+				Stops: []Stop{defaultStop},
+				LocationGroups: []LocationGroup{
+					{Id: "g1", Stops: []*Stop{&defaultStop}},
+				},
+				Warnings: []warnings.StaticWarning{
+					{
+						Kind:          warnings.LocationGroupUnknownStop{GroupID: "g1", StopID: "nope"},
+						File:          constants.LocationGroupStopsFile,
+						RowNumber:     2,
+						RowContent:    []string{"g1", "nope"},
+						HeaderContent: []string{"location_group_id", "stop_id"},
+					},
+				},
+			},
+		},
+		{
+			desc: "membership rows for unknown groups are skipped",
+			content: newZipBuilder().add(
+				"stops.txt",
+				"stop_id\nstop_id",
+			).add(
+				"location_group_stops.txt",
+				"location_group_id,stop_id",
+				"missing_group,stop_id",
+			).build(),
+			expected: &Static{
+				Stops: []Stop{defaultStop},
+			},
+		},
+		{
+			desc: "header-only location group files yield nil",
+			content: newZipBuilder().add(
+				"location_groups.txt",
+				"location_group_id,location_group_name",
+			).add(
+				"location_group_stops.txt",
+				"location_group_id,stop_id",
+			).build(),
+			expected: &Static{},
+		},
+		{
+			desc: "location groups file with missing columns",
+			content: newZipBuilder().add(
+				"location_groups.txt",
+				"location_group_name\nGroup",
+			).build(),
+			expected: &Static{
+				Warnings: []warnings.StaticWarning{
+					{
+						Kind:          warnings.MissingColumns{Columns: []string{"location_group_id"}},
+						File:          constants.LocationGroupsFile,
+						RowNumber:     0,
+						RowContent:    []string{"location_group_name"},
+						HeaderContent: []string{"location_group_name"},
+					},
+				},
+			},
+		},
+		{
+			desc: "header-only stops.txt parses to zero stops",
+			content: newZipBuilder().add(
+				"stops.txt", "stop_id,stop_name,stop_lat,stop_lon",
+			).build(),
+			expected: &Static{},
+		},
+		{
 			desc: "trip",
 			content: newZipBuilder().add(
 				"agency.txt",
@@ -552,6 +1099,102 @@ func TestParse(t *testing.T) {
 								ExactTimes:            true,
 							},
 						},
+					},
+				},
+			},
+		},
+		{
+			desc: "stop time with only one of arrival and departure time",
+			content: newZipBuilder().add(
+				"agency.txt",
+				"agency_id,agency_name,agency_url,agency_timezone\na,b,c,d",
+			).add(
+				"routes.txt",
+				"route_id,route_type\nroute_id,3",
+			).add(
+				"stops.txt",
+				"stop_id\nstop_id",
+			).add(
+				"calendar.txt",
+				"service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n"+
+					"service_id,0,0,0,0,0,0,0,20220504,20220507",
+			).add(
+				"trips.txt",
+				"route_id,service_id,trip_id\nroute_id,service_id,a",
+			).add(
+				"stop_times.txt",
+				"stop_id,trip_id,arrival_time,departure_time,stop_sequence",
+				"stop_id,a,04:05:06,,1",
+				"stop_id,a,,13:14:15,2",
+			).build(),
+			expected: &Static{
+				Agencies: []Agency{defaultAgency},
+				Routes:   []Route{defaultRoute},
+				Services: []Service{defaultService},
+				Stops:    []Stop{defaultStop},
+				Trips: []ScheduledTrip{
+					{
+						Route:   &defaultRoute,
+						Service: &defaultService,
+						ID:      "a",
+						StopTimes: []ScheduledStopTime{
+							{
+								Stop:              &defaultStop,
+								StopSequence:      1,
+								ArrivalTime:       4*time.Hour + 5*time.Minute + 6*time.Second,
+								DepartureTime:     4*time.Hour + 5*time.Minute + 6*time.Second,
+								ContinuousPickup:  PickupDropOffPolicy_No,
+								ContinuousDropOff: PickupDropOffPolicy_No,
+								ExactTimes:        true,
+							},
+							{
+								Stop:              &defaultStop,
+								StopSequence:      2,
+								ArrivalTime:       13*time.Hour + 14*time.Minute + 15*time.Second,
+								DepartureTime:     13*time.Hour + 14*time.Minute + 15*time.Second,
+								ContinuousPickup:  PickupDropOffPolicy_No,
+								ContinuousDropOff: PickupDropOffPolicy_No,
+								ExactTimes:        true,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "trip with safe duration",
+			content: newZipBuilder().add(
+				"agency.txt",
+				"agency_id,agency_name,agency_url,agency_timezone\na,b,c,d",
+			).add(
+				"routes.txt",
+				"route_id,route_type\nroute_id,3",
+			).add(
+				"calendar.txt",
+				"service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n"+
+					"service_id,0,0,0,0,0,0,0,20220504,20220507",
+			).add(
+				"trips.txt",
+				"route_id,service_id,trip_id,safe_duration_factor,safe_duration_offset",
+				"route_id,service_id,a,2,30",
+				"route_id,service_id,b,,",
+			).build(),
+			expected: &Static{
+				Agencies: []Agency{defaultAgency},
+				Routes:   []Route{defaultRoute},
+				Services: []Service{defaultService},
+				Trips: []ScheduledTrip{
+					{
+						Route:              &defaultRoute,
+						Service:            &defaultService,
+						ID:                 "a",
+						SafeDurationFactor: ptr(2.0),
+						SafeDurationOffset: ptr(30.0),
+					},
+					{
+						Route:   &defaultRoute,
+						Service: &defaultService,
+						ID:      "b",
 					},
 				},
 			},
@@ -1008,6 +1651,15 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
+			// csv.New rejects a file with no header row; an empty optional file
+			// must be treated as absent rather than aborting the whole parse.
+			desc: "zero-byte optional file is treated as absent",
+			content: newZipBuilder().add(
+				"frequencies.txt", "",
+			).build(),
+			expected: &Static{},
+		},
+		{
 			desc: "frequencies",
 			content: newZipBuilderWithDefaults().add(
 				"frequencies.txt",
@@ -1334,6 +1986,11 @@ func (z *zipBuilder) add(fileName string, fileContent ...string) *zipBuilder {
 	return z
 }
 
+func (z *zipBuilder) remove(fileName string) *zipBuilder {
+	delete(z.m, fileName)
+	return z
+}
+
 func (z *zipBuilder) build() []byte {
 	var b bytes.Buffer
 	zipWriter := zip.NewWriter(&b)
@@ -1473,5 +2130,126 @@ func TestParseStatic_ContinuousPickupDropOffDefaultToNo(t *testing.T) {
 				t.Errorf("ContinuousDropOff = %v, want %v", stopTime.ContinuousDropOff, PickupDropOffPolicy_No)
 			}
 		})
+	}
+}
+
+func TestParseStatic_UnknownTripIDIsSkipped(t *testing.T) {
+	// The second row switches to a trip_id that trips.txt does not define.
+	// Before the fix this dereferenced a nil *ScheduledTrip while presizing
+	// its StopTimes slice.
+	content := newZipBuilderWithDefaults().add(
+		"stop_times.txt",
+		"stop_id,trip_id,stop_sequence",
+		"stop_id,trip_id,1",
+		"stop_id,ghost,2",
+	).build()
+
+	static, err := ParseStatic(content, ParseStaticOptions{})
+	if err != nil {
+		t.Fatalf("ParseStatic() got error %v, want nil", err)
+	}
+	if len(static.Trips) != 1 {
+		t.Fatalf("got %d trips, want 1", len(static.Trips))
+	}
+	if got := len(static.Trips[0].StopTimes); got != 1 {
+		t.Errorf("got %d stop times on trip_id, want 1 (the ghost row must be dropped)", got)
+	}
+}
+
+func TestParseStatic_WarningRowContentSurvivesLaterRows(t *testing.T) {
+	// csv.File reuses its row storage, so a warning raised on a row that is
+	// not the last one in its file must hold its own copy of the row.
+	content := newZipBuilder().add(
+		"stops.txt",
+		"stop_id\nstop_id",
+	).add(
+		"location_groups.txt",
+		"location_group_id\ng1",
+	).add(
+		"location_group_stops.txt",
+		"location_group_id,stop_id",
+		"g1,nope",
+		"g1,stop_id",
+	).build()
+
+	static, err := ParseStatic(content, ParseStaticOptions{})
+	if err != nil {
+		t.Fatalf("ParseStatic() got error %v, want nil", err)
+	}
+	if len(static.Warnings) != 1 {
+		t.Fatalf("got warnings %+v, want exactly one", static.Warnings)
+	}
+	if diff := cmp.Diff(static.Warnings[0].RowContent, []string{"g1", "nope"}); diff != "" {
+		t.Errorf("RowContent mismatch (-got +want):\n%s", diff)
+	}
+}
+
+func TestParseStatic_StopsFileRequiredWithoutLocations(t *testing.T) {
+	content := newZipBuilder().remove("stops.txt").build()
+
+	_, err := ParseStatic(content, ParseStaticOptions{})
+	if err == nil {
+		t.Fatal("ParseStatic() got nil error, want an error because stops.txt is missing")
+	}
+	if want := `no "stops.txt" file in GTFS static feed`; err.Error() != want {
+		t.Errorf("ParseStatic() error = %q, want %q", err.Error(), want)
+	}
+}
+
+func TestParseStatic_MalformedLocationsFileIsIgnoredWithWarning(t *testing.T) {
+	for _, tc := range []struct {
+		desc       string
+		content    string
+		wantReason string
+	}{
+		{desc: "not json", content: "{", wantReason: "unexpected end of JSON input"},
+		{desc: "not a feature collection", content: `{"type":"Feature","features":[]}`, wantReason: `expected a FeatureCollection, got "Feature"`},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			content := newZipBuilderWithDefaults().add("locations.geojson", tc.content).build()
+			static, err := ParseStatic(content, ParseStaticOptions{})
+			if err != nil {
+				t.Fatalf("ParseStatic() got error %v, want nil", err)
+			}
+			if len(static.Trips) != 1 || len(static.Stops) != 1 {
+				t.Errorf("got %d trips and %d stops, want the fixed-route data to survive a broken locations.geojson", len(static.Trips), len(static.Stops))
+			}
+			if len(static.Locations) != 0 {
+				t.Errorf("got %d locations, want 0", len(static.Locations))
+			}
+			want := warnings.NewFileWarning(constants.LocationsGeoJSONFile, warnings.LocationsFileInvalid{Reason: tc.wantReason})
+			found := false
+			for _, w := range static.Warnings {
+				found = found || cmp.Equal(w, want)
+			}
+			if !found {
+				t.Errorf("Warnings = %v, want one equal to %v", static.Warnings, want)
+			}
+		})
+	}
+}
+
+func TestParseStatic_LocationsFeatureQuirks(t *testing.T) {
+	polygon := `"geometry":{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}`
+	content := newZipBuilder().add("locations.geojson",
+		`{"type":"featurecollection","features":[`+
+			`{"type":"Feature","id":"array_props","properties":[],`+polygon+`},`+
+			`{"type":"Feature","id":["not","scalar"],"properties":{},"geometry":7},`+
+			`{"type":"Feature","id":"kept","properties":{"stop_name":"Kept"},`+polygon+`}]}`,
+	).build()
+
+	static, err := ParseStatic(content, ParseStaticOptions{})
+	if err != nil {
+		t.Fatalf("ParseStatic() got error %v, want nil", err)
+	}
+	var gotIDs []string
+	for _, location := range static.Locations {
+		gotIDs = append(gotIDs, location.Id)
+	}
+	if diff := cmp.Diff(gotIDs, []string{"array_props", "kept"}); diff != "" {
+		t.Errorf("location ids mismatch (-got +want):\n%s", diff)
+	}
+	if static.Locations[1].Name != "Kept" {
+		t.Errorf("Name = %q, want %q", static.Locations[1].Name, "Kept")
 	}
 }
