@@ -1209,15 +1209,15 @@ func parseScheduledStopTimes(csv *csv.File, static *Static) []warnings.StaticWar
 			w = append(w, warnings.NewStaticWarning(csv, warnings.StopTimeInvalidWindow{Reason: reason}))
 			return ScheduledStopTime{}, false
 		}
+		// A booking rule only adds rider information, so an unresolvable id
+		// keeps the row (with no rule) rather than dropping the service.
 		pickupRule, reason := refs.resolveBookingRule("pickup_booking_rule_id", pickupBookingRuleIDColumn.Read())
 		if reason != "" {
 			w = append(w, warnings.NewStaticWarning(csv, warnings.StopTimeInvalidReference{Reason: reason}))
-			return ScheduledStopTime{}, false
 		}
 		dropOffRule, reason := refs.resolveBookingRule("drop_off_booking_rule_id", dropOffBookingRuleIDColumn.Read())
 		if reason != "" {
 			w = append(w, warnings.NewStaticWarning(csv, warnings.StopTimeInvalidReference{Reason: reason}))
-			return ScheduledStopTime{}, false
 		}
 
 		arrival, departure := parseArrivalDeparture(arrivalRaw, departureRaw)
