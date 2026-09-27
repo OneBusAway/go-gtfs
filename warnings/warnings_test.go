@@ -23,6 +23,7 @@ func TestFlexWarningKindsHaveMessages(t *testing.T) {
 		{LocationGroupUnknownStop{GroupID: "g", StopID: "s"}, `location group "g" references unknown stop "s"`},
 		{LocationInvalidGeometry{LocationID: "l", Reason: "r"}, `location "l" has invalid geometry: r`},
 		{BookingRuleInvalid{BookingRuleID: "b", Reason: "r"}, `booking rule "b" is invalid: r`},
+		{LocationsFileInvalid{Reason: "r"}, "locations.geojson is invalid and was ignored: r"},
 	} {
 		if got := tc.kind.Error(); got != tc.want {
 			t.Errorf("%T.Error() = %q, want %q", tc.kind, got, tc.want)

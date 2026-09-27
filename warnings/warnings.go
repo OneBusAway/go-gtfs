@@ -126,6 +126,16 @@ func (w LocationInvalidGeometry) Error() string {
 	return fmt.Sprintf("location %q has invalid geometry: %s", w.LocationID, w.Reason)
 }
 
+// LocationsFileInvalid is raised when locations.geojson as a whole cannot be
+// used (malformed JSON, or not a FeatureCollection). The file is ignored.
+type LocationsFileInvalid struct {
+	Reason string
+}
+
+func (w LocationsFileInvalid) Error() string {
+	return fmt.Sprintf("locations.geojson is invalid and was ignored: %s", w.Reason)
+}
+
 // BookingRuleInvalid is raised when a booking_rules.txt row is skipped.
 type BookingRuleInvalid struct {
 	BookingRuleID string
