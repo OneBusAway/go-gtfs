@@ -1284,15 +1284,15 @@ func (r *stopTimeReader) read() (ScheduledStopTime, bool) {
 		r.warn(warnings.StopTimeInvalidWindow{Reason: reason})
 		return ScheduledStopTime{}, false
 	}
+	// A booking rule only adds rider information, so an unresolvable id
+	// keeps the row (with no rule) rather than dropping the service.
 	pickupRule, reason := r.refs.resolveBookingRule("pickup_booking_rule_id", r.pickupBookingRuleIDColumn.Read())
 	if reason != "" {
 		r.warn(warnings.StopTimeInvalidReference{Reason: reason})
-		return ScheduledStopTime{}, false
 	}
 	dropOffRule, reason := r.refs.resolveBookingRule("drop_off_booking_rule_id", r.dropOffBookingRuleIDColumn.Read())
 	if reason != "" {
 		r.warn(warnings.StopTimeInvalidReference{Reason: reason})
-		return ScheduledStopTime{}, false
 	}
 
 	arrival, departure := parseArrivalDeparture(arrivalRaw, departureRaw)
