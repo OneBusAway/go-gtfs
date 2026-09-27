@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/OneBusAway/go-gtfs/constants"
 	"github.com/OneBusAway/go-gtfs/warnings"
@@ -29,14 +30,24 @@ type LocationGeometry struct {
 // locations.geojson uses. Ids and properties stay raw because feeds disagree
 // on their JSON types.
 type geoJSONFeatureCollection struct {
-	Type     string           `json:"type"`
-	Features []geoJSONFeature `json:"features"`
+	Type     string            `json:"type"`
+	Features []json.RawMessage `json:"features"`
 }
 
 type geoJSONFeature struct {
-	ID         json.RawMessage            `json:"id"`
-	Properties map[string]json.RawMessage `json:"properties"`
-	Geometry   json.RawMessage            `json:"geometry"`
+	ID         json.RawMessage `json:"id"`
+	Properties json.RawMessage `json:"properties"`
+	Geometry   json.RawMessage `json:"geometry"`
+}
+
+// properties decodes the Feature's properties object. Anything that is not
+// an object (null, an array, a scalar) yields no properties.
+func (feature geoJSONFeature) properties() map[string]json.RawMessage {
+	var properties map[string]json.RawMessage
+	if err := json.Unmarshal(feature.Properties, &properties); err != nil {
+		return nil
+	}
+	return properties
 }
 
 type geoJSONGeometry struct {
@@ -48,20 +59,29 @@ var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 
 // parseLocations decodes the content of locations.geojson. Malformed JSON or a
 // top-level object that is not a FeatureCollection is an error; an unusable
-// individual Feature is skipped with a LocationInvalidGeometry warning.
+// individual Feature, including one that is not valid JSON on its own, is
+// skipped with a LocationInvalidGeometry warning.
 func parseLocations(content []byte) ([]Location, []warnings.StaticWarning, error) {
 	var collection geoJSONFeatureCollection
 	if err := json.Unmarshal(bytes.TrimPrefix(content, utf8BOM), &collection); err != nil {
 		return nil, nil, err
 	}
-	if collection.Type != "FeatureCollection" {
+	if !strings.EqualFold(collection.Type, "FeatureCollection") {
 		return nil, nil, fmt.Errorf("expected a FeatureCollection, got %q", collection.Type)
 	}
 
 	var locations []Location
 	var w []warnings.StaticWarning
-	for _, feature := range collection.Features {
-		id := locationID(feature)
+	for _, rawFeature := range collection.Features {
+		var feature geoJSONFeature
+		if err := json.Unmarshal(rawFeature, &feature); err != nil {
+			w = append(w, warnings.NewFileWarning(constants.LocationsGeoJSONFile, warnings.LocationInvalidGeometry{
+				Reason: fmt.Sprintf("malformed feature: %v", err),
+			}))
+			continue
+		}
+		properties := feature.properties()
+		id := locationID(feature.ID, properties)
 		if id == "" {
 			w = append(w, warnings.NewFileWarning(constants.LocationsGeoJSONFile, warnings.LocationInvalidGeometry{
 				Reason: "feature has no id",
@@ -84,8 +104,8 @@ func parseLocations(content []byte) ([]Location, []warnings.StaticWarning, error
 		}
 		locations = append(locations, Location{
 			Id:          id,
-			Name:        jsonScalarString(feature.Properties["stop_name"]),
-			Description: jsonScalarString(feature.Properties["stop_desc"]),
+			Name:        jsonScalarString(properties["stop_name"]),
+			Description: jsonScalarString(properties["stop_desc"]),
 			Geometry:    geometry,
 		})
 	}
@@ -95,11 +115,11 @@ func parseLocations(content []byte) ([]Location, []warnings.StaticWarning, error
 // locationID returns the Feature id, falling back to the draft-era
 // properties.id and properties.location_id placements. A JSON number id is
 // rendered with its literal text.
-func locationID(feature geoJSONFeature) string {
+func locationID(featureID json.RawMessage, properties map[string]json.RawMessage) string {
 	candidates := []json.RawMessage{
-		feature.ID,
-		feature.Properties["id"],
-		feature.Properties["location_id"],
+		featureID,
+		properties["id"],
+		properties["location_id"],
 	}
 	for _, raw := range candidates {
 		if id := jsonScalarString(raw); id != "" {
