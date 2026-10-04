@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 var updateGolden = flag.Bool("update", false, "rewrite golden files under testdata/")
@@ -291,5 +293,154 @@ func TestParseStatic_StopTimesMemory(t *testing.T) {
 	// copies of the stop time slice are not.
 	if allocatedPerRow > 200 {
 		t.Errorf("allocated %.0f bytes per stop time, want <= 200", allocatedPerRow)
+	}
+}
+
+func TestParseStatic_SkipShapes(t *testing.T) {
+	feed := syntheticFeed(8, 9)
+	full, err := ParseStatic(feed, ParseStaticOptions{})
+	if err != nil {
+		t.Fatalf("ParseStatic: %s", err)
+	}
+	result, err := ParseStatic(feed, ParseStaticOptions{SkipShapes: true})
+	if err != nil {
+		t.Fatalf("ParseStatic: %s", err)
+	}
+	if result.Shapes != nil {
+		t.Errorf("got %d shapes, want none", len(result.Shapes))
+	}
+	for i := range result.Trips {
+		if result.Trips[i].Shape != nil {
+			t.Errorf("trip %s has shape %s, want none", result.Trips[i].ID, result.Trips[i].Shape.ID)
+		}
+		// Apart from the shape, the trips are unchanged.
+		full.Trips[i].Shape = nil
+	}
+	full.Shapes = nil
+	if diff := lineDiff(dumpStatic(full), dumpStatic(result)); diff != "" {
+		t.Errorf("result differs from a full parse beyond shapes:\n%s", diff)
+	}
+}
+
+func TestParseStatic_StopTimesNone(t *testing.T) {
+	feed := syntheticFeed(8, 9)
+	full, err := ParseStatic(feed, ParseStaticOptions{})
+	if err != nil {
+		t.Fatalf("ParseStatic: %s", err)
+	}
+	result, err := ParseStatic(feed, ParseStaticOptions{StopTimes: StopTimesNone})
+	if err != nil {
+		t.Fatalf("ParseStatic: %s", err)
+	}
+	for i := range result.Trips {
+		if result.Trips[i].StopTimes != nil || result.Trips[i].Stops != nil {
+			t.Errorf("trip %s has %d stop times and %d stops, want none",
+				result.Trips[i].ID, len(result.Trips[i].StopTimes), len(result.Trips[i].Stops))
+		}
+		full.Trips[i].StopTimes = nil
+	}
+	if diff := lineDiff(dumpStatic(full), dumpStatic(result)); diff != "" {
+		t.Errorf("result differs from a full parse beyond stop times:\n%s", diff)
+	}
+}
+
+func TestParseStatic_StopTimesNoneWithoutStopTimesFile(t *testing.T) {
+	z := newZipBuilderWithDefaults()
+	delete(z.m, "stop_times.txt")
+	if _, err := ParseStatic(z.build(), ParseStaticOptions{StopTimes: StopTimesNone}); err != nil {
+		t.Errorf("ParseStatic: %s", err)
+	}
+}
+
+func TestParseStatic_StopTimesStopsOnly(t *testing.T) {
+	feed := syntheticFeed(8, 9)
+	full, err := ParseStatic(feed, ParseStaticOptions{})
+	if err != nil {
+		t.Fatalf("ParseStatic: %s", err)
+	}
+	result, err := ParseStatic(feed, ParseStaticOptions{StopTimes: StopTimesStopsOnly})
+	if err != nil {
+		t.Fatalf("ParseStatic: %s", err)
+	}
+	stopIndex := map[*Stop]bool{}
+	for i := range result.Stops {
+		stopIndex[&result.Stops[i]] = true
+	}
+	for i := range result.Trips {
+		trip := &result.Trips[i]
+		if trip.StopTimes != nil {
+			t.Errorf("trip %s has %d stop times, want none", trip.ID, len(trip.StopTimes))
+		}
+		var want, got []string
+		for _, st := range full.Trips[i].StopTimes {
+			want = append(want, st.Stop.Id)
+		}
+		for _, stop := range trip.Stops {
+			if !stopIndex[stop] {
+				t.Errorf("trip %s references stop %s outside of Static.Stops", trip.ID, stop.Id)
+			}
+			got = append(got, stop.Id)
+		}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("trip %s stops (-want +got):\n%s", trip.ID, diff)
+		}
+		full.Trips[i].StopTimes = nil
+	}
+	if diff := lineDiff(dumpStatic(full), dumpStatic(result)); diff != "" {
+		t.Errorf("result differs from a full parse beyond stop times:\n%s", diff)
+	}
+}
+
+// TestParseStatic_ReducedModesMemory checks that the opt-in modes keep their
+// memory promise: no stop time structs, and with StopTimesStopsOnly a single
+// pointer per stop time.
+func TestParseStatic_ReducedModesMemory(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping memory measurement in short mode")
+	}
+	const nTrips, stopsPerTrip = 2000, 50
+	const rows = nTrips * stopsPerTrip
+	feed := syntheticFeed(nTrips, stopsPerTrip)
+
+	for _, tc := range []struct {
+		name                 string
+		opts                 ParseStaticOptions
+		maxRetainedPerRow    float64
+		maxAllocatedPerRow   float64
+		wantStopsOnEveryTrip bool
+	}{
+		{
+			name:                 "stops only",
+			opts:                 ParseStaticOptions{StopTimes: StopTimesStopsOnly, SkipShapes: true},
+			maxRetainedPerRow:    20,
+			maxAllocatedPerRow:   120,
+			wantStopsOnEveryTrip: true,
+		},
+		{
+			name:               "none",
+			opts:               ParseStaticOptions{StopTimes: StopTimesNone, SkipShapes: true},
+			maxRetainedPerRow:  10,
+			maxAllocatedPerRow: 40,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			result, mem := measureParseStatic(t, feed, tc.opts)
+			if tc.wantStopsOnEveryTrip {
+				for i := range result.Trips {
+					if len(result.Trips[i].Stops) == 0 {
+						t.Fatalf("trip %s has no stops", result.Trips[i].ID)
+					}
+				}
+			}
+			retainedPerRow := float64(mem.retained) / rows
+			allocatedPerRow := float64(mem.allocated) / rows
+			t.Logf("retained %.0f B/stop time, allocated %.0f B/stop time", retainedPerRow, allocatedPerRow)
+			if retainedPerRow > tc.maxRetainedPerRow {
+				t.Errorf("retained %.0f bytes per stop time, want <= %.0f", retainedPerRow, tc.maxRetainedPerRow)
+			}
+			if allocatedPerRow > tc.maxAllocatedPerRow {
+				t.Errorf("allocated %.0f bytes per stop time, want <= %.0f", allocatedPerRow, tc.maxAllocatedPerRow)
+			}
+		})
 	}
 }
