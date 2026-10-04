@@ -209,7 +209,12 @@ func ParseStatic(content []byte, opts ParseStaticOptions) (*Static, error) {
 		fileNameToFile[constants.StaticFile(file.Name)] = file
 	}
 	serviceIdToService := map[string]Service{}
-	shapeIdToShape := map[string]*Shape{}
+	// With SkipShapes the map stays nil, which tells parseScheduledTrips not
+	// to look up (and warn about) shape IDs that were never loaded.
+	var shapeIdToShape map[string]*Shape
+	if !opts.SkipShapes {
+		shapeIdToShape = map[string]*Shape{}
+	}
 	tripIdToScheduledTrip := map[string]*ScheduledTrip{}
 	timezone := time.UTC
 	for _, table := range []struct {
@@ -781,7 +786,7 @@ func parseScheduledTrips(csv *csv.File, routes []Route, services []Service, shap
 		}
 
 		shapeIDOrNil := shapeIDColumn.Read()
-		if shapeIDOrNil != "" {
+		if shapeIDOrNil != "" && shapeIDToShape != nil {
 			if shape, ok := shapeIDToShape[shapeIDOrNil]; ok {
 				trip.Shape = shape
 			} else {
