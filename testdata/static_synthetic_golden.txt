@@ -1,0 +1,214 @@
+agency {Id:agency Name:Agency Url:https://example.com Timezone:America/Los_Angeles Language: Phone: FareUrl: Email:}
+route route_0 agency=agency FFFFFF 000000 0   BUS  false NOT_ALLOWED NOT_ALLOWED
+route route_1 agency=agency FFFFFF 000000 1   BUS  false NOT_ALLOWED NOT_ALLOWED
+route route_2 agency=agency FFFFFF 000000 2   BUS  false NOT_ALLOWED NOT_ALLOWED
+route route_3 agency=agency FFFFFF 000000 3   BUS  false NOT_ALLOWED NOT_ALLOWED
+route route_4 agency=agency FFFFFF 000000 4   BUS  false NOT_ALLOWED NOT_ALLOWED
+stop station_0 "Station 0" 47 -122 STATION parent= NOT_SPECIFIED
+stop station_10 "Station 10" 47.001 -122.001 STATION parent= NOT_SPECIFIED
+stop stop_0 "Stop 0" 47 -122 PLATFORM parent=station_0 NOT_SPECIFIED
+stop stop_1 "Stop 1" 47.0001 -122.0001 STOP parent= NOT_SPECIFIED
+stop stop_2 "Stop 2" 47.0002 -122.0002 STOP parent= NOT_SPECIFIED
+stop stop_3 "Stop 3" 47.0003 -122.0003 STOP parent= NOT_SPECIFIED
+stop stop_4 "Stop 4" 47.0004 -122.0004 STOP parent= NOT_SPECIFIED
+stop stop_5 "Stop 5" 47.0005 -122.0005 STOP parent= NOT_SPECIFIED
+stop stop_6 "Stop 6" 47.0006 -122.0006 STOP parent= NOT_SPECIFIED
+stop stop_7 "Stop 7" 47.0007 -122.0007 STOP parent= NOT_SPECIFIED
+stop stop_8 "Stop 8" 47.0008 -122.0008 STOP parent= NOT_SPECIFIED
+stop stop_9 "Stop 9" 47.0009 -122.0009 STOP parent= NOT_SPECIFIED
+stop stop_10 "Stop 10" 47.001 -122.001 PLATFORM parent=station_10 NOT_SPECIFIED
+stop stop_11 "Stop 11" 47.0011 -122.0011 STOP parent= NOT_SPECIFIED
+stop stop_12 "Stop 12" 47.0012 -122.0012 STOP parent= NOT_SPECIFIED
+stop stop_13 "Stop 13" 47.0013 -122.0013 STOP parent= NOT_SPECIFIED
+stop stop_14 "Stop 14" 47.0014 -122.0014 STOP parent= NOT_SPECIFIED
+stop stop_15 "Stop 15" 47.0015 -122.0015 STOP parent= NOT_SPECIFIED
+stop stop_16 "Stop 16" 47.0016 -122.0016 STOP parent= NOT_SPECIFIED
+stop stop_17 "Stop 17" 47.0017 -122.0017 STOP parent= NOT_SPECIFIED
+service {Id:service_0 Monday:true Tuesday:true Wednesday:true Thursday:true Friday:true Saturday:false Sunday:false StartDate:2022-05-04 00:00:00 -0700 PDT EndDate:2022-05-07 00:00:00 -0700 PDT AddedDates:[] RemovedDates:[2022-05-05 00:00:00 -0700 PDT]}
+service {Id:service_1 Monday:false Tuesday:false Wednesday:false Thursday:false Friday:false Saturday:true Sunday:true StartDate:2022-05-04 00:00:00 -0700 PDT EndDate:2022-05-07 00:00:00 -0700 PDT AddedDates:[] RemovedDates:[]}
+shape shape_0
+  point 47 -122 0.5
+  point 47.0001 -122 100.5
+  point 47.0002 -122 200.5
+  point 47.0003 -122 300.5
+  point 47.0004 -122 400.5
+  point 47.0005 -122 500.5
+  point 47.0006 -122 600.5
+  point 47.0007 -122 700.5
+  point 47.0008 -122 800.5
+  point 47.0009 -122 900.5
+  point 47.001 -122 1000.5
+  point 47.0011 -122 1100.5
+  point 47.0012 -122 1200.5
+  point 47.0013 -122 1300.5
+  point 47.0014 -122 1400.5
+  point 47.0015 -122 1500.5
+  point 47.0016 -122 1600.5
+  point 47.0017 -122 1700.5
+  point 47.0018 -122 1800.5
+  point 47.0019 -122 1900.5
+shape shape_1
+  point 47 -122.0001 0.5
+  point 47.0001 -122.0001 100.5
+  point 47.0002 -122.0001 200.5
+  point 47.0003 -122.0001 300.5
+  point 47.0004 -122.0001 400.5
+  point 47.0005 -122.0001 500.5
+  point 47.0006 -122.0001 600.5
+  point 47.0007 -122.0001 700.5
+  point 47.0008 -122.0001 800.5
+  point 47.0009 -122.0001 900.5
+  point 47.001 -122.0001 1000.5
+  point 47.0011 -122.0001 1100.5
+  point 47.0012 -122.0001 1200.5
+  point 47.0013 -122.0001 1300.5
+  point 47.0014 -122.0001 1400.5
+  point 47.0015 -122.0001 1500.5
+  point 47.0016 -122.0001 1600.5
+  point 47.0017 -122.0001 1700.5
+  point 47.0018 -122.0001 1800.5
+  point 47.0019 -122.0001 1900.5
+shape shape_2
+  point 47 -122.0002 0.5
+  point 47.0001 -122.0002 100.5
+  point 47.0002 -122.0002 200.5
+  point 47.0003 -122.0002 300.5
+  point 47.0004 -122.0002 400.5
+  point 47.0005 -122.0002 500.5
+  point 47.0006 -122.0002 600.5
+  point 47.0007 -122.0002 700.5
+  point 47.0008 -122.0002 800.5
+  point 47.0009 -122.0002 900.5
+  point 47.001 -122.0002 1000.5
+  point 47.0011 -122.0002 1100.5
+  point 47.0012 -122.0002 1200.5
+  point 47.0013 -122.0002 1300.5
+  point 47.0014 -122.0002 1400.5
+  point 47.0015 -122.0002 1500.5
+  point 47.0016 -122.0002 1600.5
+  point 47.0017 -122.0002 1700.5
+  point 47.0018 -122.0002 1800.5
+  point 47.0019 -122.0002 1900.5
+shape shape_3
+  point 47 -122.0003 0.5
+  point 47.0001 -122.0003 100.5
+  point 47.0002 -122.0003 200.5
+  point 47.0003 -122.0003 300.5
+  point 47.0004 -122.0003 400.5
+  point 47.0005 -122.0003 500.5
+  point 47.0006 -122.0003 600.5
+  point 47.0007 -122.0003 700.5
+  point 47.0008 -122.0003 800.5
+  point 47.0009 -122.0003 900.5
+  point 47.001 -122.0003 1000.5
+  point 47.0011 -122.0003 1100.5
+  point 47.0012 -122.0003 1200.5
+  point 47.0013 -122.0003 1300.5
+  point 47.0014 -122.0003 1400.5
+  point 47.0015 -122.0003 1500.5
+  point 47.0016 -122.0003 1600.5
+  point 47.0017 -122.0003 1700.5
+  point 47.0018 -122.0003 1800.5
+  point 47.0019 -122.0003 1900.5
+shape shape_4
+  point 47 -122.0004 0.5
+  point 47.0001 -122.0004 100.5
+  point 47.0002 -122.0004 200.5
+  point 47.0003 -122.0004 300.5
+  point 47.0004 -122.0004 400.5
+  point 47.0005 -122.0004 500.5
+  point 47.0006 -122.0004 600.5
+  point 47.0007 -122.0004 700.5
+  point 47.0008 -122.0004 800.5
+  point 47.0009 -122.0004 900.5
+  point 47.001 -122.0004 1000.5
+  point 47.0011 -122.0004 1100.5
+  point 47.0012 -122.0004 1200.5
+  point 47.0013 -122.0004 1300.5
+  point 47.0014 -122.0004 1400.5
+  point 47.0015 -122.0004 1500.5
+  point 47.0016 -122.0004 1600.5
+  point 47.0017 -122.0004 1700.5
+  point 47.0018 -122.0004 1800.5
+  point 47.0019 -122.0004 1900.5
+trip trip_0 route=route_0 service=service_0 "Headsign 0" "" FALSE block_0 NOT_SPECIFIED NOT_SPECIFIED shape=shape_0 freq=[{StartTime:6h0m0s EndTime:7h0m0s Headway:10m0s ExactTimes:FREQUENCY_BASED}]
+  stop_time trip=false stop=stop_0 arr=6h0m0s dep=6h0m0s seq=1 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 0.25 true
+  stop_time trip=false stop=stop_1 arr=6h1m0s dep=6h1m0s seq=2 "" NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED 150.25 true
+  stop_time trip=false stop=stop_2 arr=6h2m0s dep=6h2m0s seq=3 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 300.25 false
+  stop_time trip=false stop=stop_3 arr=6h3m0s dep=6h3m0s seq=4 "To stop 8" NOT_ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 450.25 true
+  stop_time trip=false stop=stop_4 arr=6h4m0s dep=6h4m0s seq=5 "" ALLOWED NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED 600.25 true
+  stop_time trip=false stop=stop_5 arr=6h5m0s dep=6h5m0s seq=6 "" NOT_ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 750.25 true
+  stop_time trip=false stop=stop_6 arr=6h6m0s dep=6h6m0s seq=7 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 900.25 false
+  stop_time trip=false stop=stop_7 arr=6h7m0s dep=6h7m0s seq=8 "" NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED 1050.25 true
+  stop_time trip=false stop=stop_8 arr=6h8m0s dep=6h8m0s seq=9 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 1200.25 true
+trip trip_1 route=route_1 service=service_1 "Headsign 1" "" TRUE block_0 NOT_SPECIFIED NOT_SPECIFIED shape=shape_1 freq=[]
+  stop_time trip=false stop=stop_1 arr=6h1m0s dep=6h1m0s seq=1 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 0.25 true
+  stop_time trip=false stop=stop_2 arr=6h2m0s dep=6h2m0s seq=2 "" NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED 150.25 true
+  stop_time trip=false stop=stop_3 arr=6h3m0s dep=6h3m0s seq=3 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 300.25 false
+  stop_time trip=false stop=stop_4 arr=6h4m0s dep=6h4m0s seq=4 "To stop 8" NOT_ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 450.25 true
+  stop_time trip=false stop=stop_5 arr=6h5m0s dep=6h5m0s seq=5 "" ALLOWED NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED 600.25 true
+  stop_time trip=false stop=stop_6 arr=6h6m0s dep=6h6m0s seq=6 "" NOT_ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 750.25 true
+  stop_time trip=false stop=stop_7 arr=6h7m0s dep=6h7m0s seq=7 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 900.25 false
+  stop_time trip=false stop=stop_8 arr=6h8m0s dep=6h8m0s seq=8 "" NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED 1050.25 true
+  stop_time trip=false stop=stop_9 arr=6h9m0s dep=6h9m0s seq=9 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 1200.25 true
+trip trip_2 route=route_2 service=service_0 "Headsign 2" "" FALSE block_0 NOT_SPECIFIED NOT_SPECIFIED shape=shape_2 freq=[]
+  stop_time trip=false stop=stop_2 arr=6h2m0s dep=6h2m0s seq=1 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 0.25 true
+  stop_time trip=false stop=stop_3 arr=6h3m0s dep=6h3m0s seq=2 "" NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED 150.25 true
+  stop_time trip=false stop=stop_4 arr=6h4m0s dep=6h4m0s seq=3 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 300.25 false
+  stop_time trip=false stop=stop_5 arr=6h5m0s dep=6h5m0s seq=4 "To stop 8" NOT_ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 450.25 true
+  stop_time trip=false stop=stop_6 arr=6h6m0s dep=6h6m0s seq=5 "" ALLOWED NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED 600.25 true
+  stop_time trip=false stop=stop_7 arr=6h7m0s dep=6h7m0s seq=6 "" NOT_ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 750.25 true
+  stop_time trip=false stop=stop_8 arr=6h8m0s dep=6h8m0s seq=7 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 900.25 false
+  stop_time trip=false stop=stop_9 arr=6h9m0s dep=6h9m0s seq=8 "" NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED 1050.25 true
+  stop_time trip=false stop=stop_10 arr=6h10m0s dep=6h10m0s seq=9 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 1200.25 true
+trip trip_3 route=route_3 service=service_1 "Headsign 3" "" TRUE block_0 NOT_SPECIFIED NOT_SPECIFIED shape=shape_3 freq=[]
+  stop_time trip=false stop=stop_3 arr=6h3m0s dep=6h3m0s seq=1 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 0.25 true
+  stop_time trip=false stop=stop_4 arr=6h4m0s dep=6h4m0s seq=2 "" NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED 150.25 true
+  stop_time trip=false stop=stop_5 arr=6h5m0s dep=6h5m0s seq=3 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 300.25 false
+  stop_time trip=false stop=stop_6 arr=6h6m0s dep=6h6m0s seq=4 "To stop 8" NOT_ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 450.25 true
+  stop_time trip=false stop=stop_7 arr=6h7m0s dep=6h7m0s seq=5 "" ALLOWED NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED 600.25 true
+  stop_time trip=false stop=stop_8 arr=6h8m0s dep=6h8m0s seq=6 "" NOT_ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 750.25 true
+  stop_time trip=false stop=stop_9 arr=6h9m0s dep=6h9m0s seq=7 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 900.25 false
+  stop_time trip=false stop=stop_10 arr=6h10m0s dep=6h10m0s seq=8 "" NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED 1050.25 true
+  stop_time trip=false stop=stop_11 arr=6h11m0s dep=6h11m0s seq=9 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 1200.25 true
+trip trip_4 route=route_4 service=service_0 "Headsign 4" "" FALSE block_1 NOT_SPECIFIED NOT_SPECIFIED shape=shape_4 freq=[]
+  stop_time trip=false stop=stop_4 arr=6h4m0s dep=6h4m0s seq=1 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 0.25 true
+  stop_time trip=false stop=stop_5 arr=6h5m0s dep=6h5m0s seq=2 "" NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED 150.25 true
+  stop_time trip=false stop=stop_6 arr=6h6m0s dep=6h6m0s seq=3 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 300.25 false
+  stop_time trip=false stop=stop_7 arr=6h7m0s dep=6h7m0s seq=4 "To stop 8" NOT_ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 450.25 true
+  stop_time trip=false stop=stop_8 arr=6h8m0s dep=6h8m0s seq=5 "" ALLOWED NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED 600.25 true
+  stop_time trip=false stop=stop_9 arr=6h9m0s dep=6h9m0s seq=6 "" NOT_ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 750.25 true
+  stop_time trip=false stop=stop_10 arr=6h10m0s dep=6h10m0s seq=7 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 900.25 false
+  stop_time trip=false stop=stop_11 arr=6h11m0s dep=6h11m0s seq=8 "" NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED 1050.25 true
+  stop_time trip=false stop=stop_12 arr=6h12m0s dep=6h12m0s seq=9 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 1200.25 true
+trip trip_5 route=route_0 service=service_1 "Headsign 0" "" TRUE block_1 NOT_SPECIFIED NOT_SPECIFIED shape=shape_0 freq=[]
+  stop_time trip=false stop=stop_5 arr=6h5m0s dep=6h5m0s seq=1 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 0.25 true
+  stop_time trip=false stop=stop_6 arr=6h6m0s dep=6h6m0s seq=2 "" NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED 150.25 true
+  stop_time trip=false stop=stop_7 arr=6h7m0s dep=6h7m0s seq=3 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 300.25 false
+  stop_time trip=false stop=stop_8 arr=6h8m0s dep=6h8m0s seq=4 "To stop 8" NOT_ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 450.25 true
+  stop_time trip=false stop=stop_9 arr=6h9m0s dep=6h9m0s seq=5 "" ALLOWED NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED 600.25 true
+  stop_time trip=false stop=stop_10 arr=6h10m0s dep=6h10m0s seq=6 "" NOT_ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 750.25 true
+  stop_time trip=false stop=stop_11 arr=6h11m0s dep=6h11m0s seq=7 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 900.25 false
+  stop_time trip=false stop=stop_12 arr=6h12m0s dep=6h12m0s seq=8 "" NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED 1050.25 true
+  stop_time trip=false stop=stop_13 arr=6h13m0s dep=6h13m0s seq=9 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 1200.25 true
+trip trip_6 route=route_1 service=service_0 "Headsign 1" "" FALSE block_1 NOT_SPECIFIED NOT_SPECIFIED shape=shape_1 freq=[]
+  stop_time trip=false stop=stop_6 arr=6h6m0s dep=6h6m0s seq=1 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 0.25 true
+  stop_time trip=false stop=stop_7 arr=6h7m0s dep=6h7m0s seq=2 "" NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED 150.25 true
+  stop_time trip=false stop=stop_8 arr=6h8m0s dep=6h8m0s seq=3 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 300.25 false
+  stop_time trip=false stop=stop_9 arr=6h9m0s dep=6h9m0s seq=4 "To stop 8" NOT_ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 450.25 true
+  stop_time trip=false stop=stop_10 arr=6h10m0s dep=6h10m0s seq=5 "" ALLOWED NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED 600.25 true
+  stop_time trip=false stop=stop_11 arr=6h11m0s dep=6h11m0s seq=6 "" NOT_ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 750.25 true
+  stop_time trip=false stop=stop_12 arr=6h12m0s dep=6h12m0s seq=7 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 900.25 false
+  stop_time trip=false stop=stop_13 arr=6h13m0s dep=6h13m0s seq=8 "" NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED 1050.25 true
+  stop_time trip=false stop=stop_14 arr=6h14m0s dep=6h14m0s seq=9 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 1200.25 true
+trip trip_7 route=route_2 service=service_1 "Headsign 2" "" TRUE block_1 NOT_SPECIFIED NOT_SPECIFIED shape=shape_2 freq=[]
+  stop_time trip=false stop=stop_7 arr=6h7m0s dep=6h7m0s seq=1 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 0.25 true
+  stop_time trip=false stop=stop_8 arr=6h8m0s dep=6h8m0s seq=2 "" NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED 150.25 true
+  stop_time trip=false stop=stop_9 arr=6h9m0s dep=6h9m0s seq=3 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 300.25 false
+  stop_time trip=false stop=stop_10 arr=6h10m0s dep=6h10m0s seq=4 "To stop 8" NOT_ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 450.25 true
+  stop_time trip=false stop=stop_11 arr=6h11m0s dep=6h11m0s seq=5 "" ALLOWED NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED 600.25 true
+  stop_time trip=false stop=stop_12 arr=6h12m0s dep=6h12m0s seq=6 "" NOT_ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 750.25 true
+  stop_time trip=false stop=stop_13 arr=6h13m0s dep=6h13m0s seq=7 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 900.25 false
+  stop_time trip=false stop=stop_14 arr=6h14m0s dep=6h14m0s seq=8 "" NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED NOT_ALLOWED 1050.25 true
+  stop_time trip=false stop=stop_15 arr=6h15m0s dep=6h15m0s seq=9 "" ALLOWED ALLOWED NOT_ALLOWED NOT_ALLOWED 1200.25 true
+warnings 0

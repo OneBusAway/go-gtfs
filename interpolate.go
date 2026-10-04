@@ -4,11 +4,10 @@ import (
 	"time"
 )
 
-// InterpolateStopTimes Helper: interpolate missing arrival or departure times evenly
+// interpolateStopTimes fills missing arrival or departure times evenly. It
+// modifies times in place and returns it, or nil when times is empty.
 func interpolateStopTimes(times []ScheduledStopTime) []ScheduledStopTime {
-	// Work on a copy so the original slice is not modified outside
-	result := make([]ScheduledStopTime, len(times))
-	copy(result, times)
+	result := times
 	n := len(result)
 	if n == 0 {
 		return nil
@@ -52,9 +51,11 @@ func interpolateStopTimes(times []ScheduledStopTime) []ScheduledStopTime {
 	return result
 }
 
+// interpolateStopTimesByShapeDist fills missing arrival or departure times in
+// proportion to shape distance traveled. It modifies times in place and
+// returns it, or nil when times is empty.
 func interpolateStopTimesByShapeDist(times []ScheduledStopTime) []ScheduledStopTime {
-	result := make([]ScheduledStopTime, len(times))
-	copy(result, times)
+	result := times
 	n := len(result)
 	if n == 0 {
 		return nil
