@@ -205,26 +205,8 @@ func TestParseStatic_SyntheticGolden(t *testing.T) {
 		t.Fatalf("reading golden file (run with -update to create it): %s", err)
 	}
 	if got != string(want) {
-		t.Errorf("parse result differs from %s; diff (-want +got):\n%s", goldenFile, lineDiff(string(want), got))
+		t.Errorf("parse result differs from %s; diff (-want +got):\n%s", goldenFile, cmp.Diff(string(want), got))
 	}
-}
-
-func lineDiff(want, got string) string {
-	wantLines, gotLines := strings.Split(want, "\n"), strings.Split(got, "\n")
-	var b strings.Builder
-	for i := 0; i < len(wantLines) || i < len(gotLines); i++ {
-		var w, g string
-		if i < len(wantLines) {
-			w = wantLines[i]
-		}
-		if i < len(gotLines) {
-			g = gotLines[i]
-		}
-		if w != g {
-			fmt.Fprintf(&b, "line %d:\n- %s\n+ %s\n", i+1, w, g)
-		}
-	}
-	return b.String()
 }
 
 type parseMemory struct {
@@ -317,7 +299,7 @@ func TestParseStatic_SkipShapes(t *testing.T) {
 		full.Trips[i].Shape = nil
 	}
 	full.Shapes = nil
-	if diff := lineDiff(dumpStatic(full), dumpStatic(result)); diff != "" {
+	if diff := cmp.Diff(dumpStatic(full), dumpStatic(result)); diff != "" {
 		t.Errorf("result differs from a full parse beyond shapes:\n%s", diff)
 	}
 }
@@ -339,7 +321,7 @@ func TestParseStatic_StopTimesNone(t *testing.T) {
 		}
 		full.Trips[i].StopTimes = nil
 	}
-	if diff := lineDiff(dumpStatic(full), dumpStatic(result)); diff != "" {
+	if diff := cmp.Diff(dumpStatic(full), dumpStatic(result)); diff != "" {
 		t.Errorf("result differs from a full parse beyond stop times:\n%s", diff)
 	}
 }
@@ -386,7 +368,7 @@ func TestParseStatic_StopTimesStopsOnly(t *testing.T) {
 		}
 		full.Trips[i].StopTimes = nil
 	}
-	if diff := lineDiff(dumpStatic(full), dumpStatic(result)); diff != "" {
+	if diff := cmp.Diff(dumpStatic(full), dumpStatic(result)); diff != "" {
 		t.Errorf("result differs from a full parse beyond stop times:\n%s", diff)
 	}
 }
@@ -438,6 +420,51 @@ func TestParseStatic_ReducedModesMemory(t *testing.T) {
 			if retainedPerRow > tc.maxRetainedPerRow {
 				t.Errorf("retained %.0f bytes per stop time, want <= %.0f", retainedPerRow, tc.maxRetainedPerRow)
 			}
+			if allocatedPerRow > tc.maxAllocatedPerRow {
+				t.Errorf("allocated %.0f bytes per stop time, want <= %.0f", allocatedPerRow, tc.maxAllocatedPerRow)
+			}
+		})
+	}
+}
+
+// TestParseStatic_InterleavedStopTimesMemory covers feeds whose stop_times.txt
+// is not grouped by trip (for example, sorted by stop_sequence). Each trip's
+// rows then arrive one at a time, and merging them must not copy the trip's
+// rows again on every arrival.
+func TestParseStatic_InterleavedStopTimesMemory(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping memory measurement in short mode")
+	}
+	const nTrips, stopsPerTrip = 1000, 100
+	var stopTimes strings.Builder
+	stopTimes.WriteString("trip_id,stop_id,arrival_time,departure_time,stop_sequence\n")
+	for i := 0; i < stopsPerTrip; i++ {
+		for trip := 0; trip < nTrips; trip++ {
+			fmt.Fprintf(&stopTimes, "trip_%d,stop_id,08:%02d:00,08:%02d:00,%d\n", trip, i%60, i%60, i)
+		}
+	}
+	var trips strings.Builder
+	trips.WriteString("route_id,service_id,trip_id\n")
+	for trip := 0; trip < nTrips; trip++ {
+		fmt.Fprintf(&trips, "route_id,service_id,trip_%d\n", trip)
+	}
+	feed := newZipBuilderWithDefaults().
+		add("trips.txt", trips.String()).
+		add("stop_times.txt", stopTimes.String()).
+		build()
+
+	for _, tc := range []struct {
+		name               string
+		opts               ParseStaticOptions
+		maxAllocatedPerRow float64
+	}{
+		{"full", ParseStaticOptions{}, 600},
+		{"stops only", ParseStaticOptions{StopTimes: StopTimesStopsOnly}, 200},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, mem := measureParseStatic(t, feed, tc.opts)
+			allocatedPerRow := float64(mem.allocated) / (nTrips * stopsPerTrip)
+			t.Logf("allocated %.0f B/stop time", allocatedPerRow)
 			if allocatedPerRow > tc.maxAllocatedPerRow {
 				t.Errorf("allocated %.0f bytes per stop time, want <= %.0f", allocatedPerRow, tc.maxAllocatedPerRow)
 			}

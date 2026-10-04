@@ -824,33 +824,10 @@ func parseScheduledStopTimes(csv *csv.File, stops []Stop, trips []ScheduledTrip)
 		return
 	}
 
-	idToStop := map[string]*Stop{}
-	for i := range stops {
-		idToStop[stops[i].Id] = &stops[i]
-	}
-	idToTrip := map[string]*ScheduledTrip{}
-	for i := range trips {
-		idToTrip[trips[i].ID] = &trips[i]
-	}
-	// Rows for the trip being read accumulate in a reused buffer and are then
-	// copied into an exactly-sized slice on the trip. Appending to the trip
-	// directly would leave up to half of every slice as unused capacity.
-	var pending []ScheduledStopTime
-	var currentTrip *ScheduledTrip
-	var currentTripID string
-	started := false
-	flush := func() {
-		if currentTrip != nil && len(pending) > 0 {
-			stopTimes := make([]ScheduledStopTime, len(currentTrip.StopTimes)+len(pending))
-			n := copy(stopTimes, currentTrip.StopTimes)
-			copy(stopTimes[n:], pending)
-			currentTrip.StopTimes = stopTimes
-		}
-		pending = pending[:0]
-	}
+	idToStop := stopsByID(stops)
 	headsigns := stringInterner{}
 	var hasNonEmptyShapeDistRow = false
-	for csv.NextRow() {
+	stopTimesByTrip := readTripRows(csv, tripIDColumn, trips, func() (ScheduledStopTime, bool) {
 		arrival, arrivalOk := parseGtfsTimeToDuration(arrivalTimeColumn.Read())
 		departure, departureOk := parseGtfsTimeToDuration(departureTimeColumn.Read())
 
@@ -866,7 +843,7 @@ func parseScheduledStopTimes(csv *csv.File, stops []Stop, trips []ScheduledTrip)
 		stopSequence, err := strconv.Atoi(stopSequenceKey.Read())
 		if err != nil {
 			// TODO: log a warning
-			continue
+			return ScheduledStopTime{}, false
 		}
 		stopTime := ScheduledStopTime{
 			Stop:                  idToStop[stopIDColumn.Read()],
@@ -881,53 +858,21 @@ func parseScheduledStopTimes(csv *csv.File, stops []Stop, trips []ScheduledTrip)
 			ShapeDistanceTraveled: parseFloat64(shapeDistanceTraveledColumn.Read()),
 			ExactTimes:            timepointColumn.ReadOr("1") != "0",
 		}
-		tripID := tripIDColumn.Read()
-		if !started || currentTripID != tripID {
-			flush()
-			currentTrip = idToTrip[tripID]
-			currentTripID = tripID
-			started = true
-		}
-		if missingKeys := csv.MissingRowKeys(); len(missingKeys) > 0 {
-			log.Printf("Skipping stop time because of missing keys %s", missingKeys)
+		return stopTime, stopTime.Stop != nil
+	})
+	for i, stopTimes := range stopTimesByTrip {
+		if len(stopTimes) == 0 {
 			continue
 		}
-		if stopTime.Stop == nil {
-			continue
-		}
-		if currentTrip == nil {
-			continue
-		}
-		pending = append(pending, stopTime)
-	}
-	flush()
-	for _, trip := range idToTrip {
-		sort.Slice(trip.StopTimes, func(i, j int) bool {
-			return trip.StopTimes[i].StopSequence < trip.StopTimes[j].StopSequence
+		sort.Slice(stopTimes, func(a, b int) bool {
+			return stopTimes[a].StopSequence < stopTimes[b].StopSequence
 		})
 		if hasNonEmptyShapeDistRow {
-			trip.StopTimes = interpolateStopTimesByShapeDist(trip.StopTimes)
+			trips[i].StopTimes = interpolateStopTimesByShapeDist(stopTimes)
 		} else {
-			trip.StopTimes = interpolateStopTimes(trip.StopTimes)
+			trips[i].StopTimes = interpolateStopTimes(stopTimes)
 		}
 	}
-}
-
-// stringInterner deduplicates strings read from CSV rows. Beyond saving
-// memory on repeated values, it copies each value out of its row: a string
-// sliced from a row keeps the whole row alive, even when it is empty.
-type stringInterner map[string]string
-
-func (m stringInterner) intern(s string) string {
-	if s == "" {
-		return ""
-	}
-	if v, ok := m[s]; ok {
-		return v
-	}
-	s = strings.Clone(s)
-	m[s] = s
-	return s
 }
 
 type stopVisit struct {
@@ -947,70 +892,116 @@ func parseTripStops(csv *csv.File, stops []Stop, trips []ScheduledTrip) {
 		return
 	}
 
-	idToStop := map[string]*Stop{}
+	idToStop := stopsByID(stops)
+	visitsByTrip := readTripRows(csv, tripIDColumn, trips, func() (stopVisit, bool) {
+		stopSequence, err := strconv.Atoi(stopSequenceColumn.Read())
+		if err != nil {
+			return stopVisit{}, false
+		}
+		stop := idToStop[stopIDColumn.Read()]
+		return stopVisit{sequence: stopSequence, stop: stop}, stop != nil
+	})
+	for i, visits := range visitsByTrip {
+		if len(visits) == 0 {
+			continue
+		}
+		sort.Slice(visits, func(a, b int) bool {
+			return visits[a].sequence < visits[b].sequence
+		})
+		tripStops := make([]*Stop, len(visits))
+		for j := range visits {
+			tripStops[j] = visits[j].stop
+		}
+		trips[i].Stops = tripStops
+		visitsByTrip[i] = nil
+	}
+}
+
+func stopsByID(stops []Stop) map[string]*Stop {
+	idToStop := make(map[string]*Stop, len(stops))
 	for i := range stops {
 		idToStop[stops[i].Id] = &stops[i]
 	}
-	idToTripIndex := map[string]int{}
+	return idToStop
+}
+
+// readTripRows reads every row of a stop_times-shaped file and groups the
+// values readRow builds by trip, indexed like trips. Rows for which readRow
+// returns false, rows with missing required values, and rows for unknown
+// trips are dropped.
+//
+// Each trip's rows are buffered while they are contiguous in the file and
+// then copied into a slice of exactly that size, so the result carries no
+// slack capacity. A trip whose rows resume after another trip's grows by
+// append instead, and is trimmed to size once the file is read.
+func readTripRows[T any](f *csv.File, tripIDColumn csv.RequiredColumn, trips []ScheduledTrip, readRow func() (T, bool)) [][]T {
+	idToTripIndex := make(map[string]int, len(trips))
 	for i := range trips {
 		idToTripIndex[trips[i].ID] = i
 	}
-	// Visits are kept per trip until every row is read, because a trip's
-	// rows need not be contiguous and are ordered by stop_sequence at the end.
-	visits := make([][]stopVisit, len(trips))
-	var pending []stopVisit
+	rowsByTrip := make([][]T, len(trips))
+	resumed := map[int]bool{}
+	var pending []T
 	currentTrip := -1
 	var currentTripID string
-	started := false
 	flush := func() {
-		if currentTrip >= 0 && len(pending) > 0 {
-			merged := make([]stopVisit, len(visits[currentTrip])+len(pending))
-			n := copy(merged, visits[currentTrip])
-			copy(merged[n:], pending)
-			visits[currentTrip] = merged
+		if currentTrip < 0 || len(pending) == 0 {
+			return
+		}
+		if rowsByTrip[currentTrip] == nil {
+			rowsByTrip[currentTrip] = make([]T, len(pending))
+			copy(rowsByTrip[currentTrip], pending)
+		} else {
+			rowsByTrip[currentTrip] = append(rowsByTrip[currentTrip], pending...)
+			resumed[currentTrip] = true
 		}
 		pending = pending[:0]
 	}
-	for csv.NextRow() {
-		stopSequence, err := strconv.Atoi(stopSequenceColumn.Read())
-		if err != nil {
+	for f.NextRow() {
+		row, ok := readRow()
+		if !ok {
 			continue
 		}
-		stop := idToStop[stopIDColumn.Read()]
-		tripID := tripIDColumn.Read()
-		if !started || currentTripID != tripID {
+		// currentTripID starts out empty, which is safe: a row with an empty
+		// trip ID is dropped below for missing a required value.
+		if tripID := tripIDColumn.Read(); tripID != currentTripID {
 			flush()
 			currentTrip = -1
 			if i, ok := idToTripIndex[tripID]; ok {
 				currentTrip = i
 			}
 			currentTripID = tripID
-			started = true
 		}
-		if missingKeys := csv.MissingRowKeys(); len(missingKeys) > 0 {
+		if missingKeys := f.MissingRowKeys(); len(missingKeys) > 0 {
 			log.Printf("Skipping stop time because of missing keys %s", missingKeys)
 			continue
 		}
-		if stop == nil || currentTrip < 0 {
-			continue
+		if currentTrip >= 0 {
+			pending = append(pending, row)
 		}
-		pending = append(pending, stopVisit{sequence: stopSequence, stop: stop})
 	}
 	flush()
-	for i, tripVisits := range visits {
-		if len(tripVisits) == 0 {
-			continue
-		}
-		sort.Slice(tripVisits, func(a, b int) bool {
-			return tripVisits[a].sequence < tripVisits[b].sequence
-		})
-		tripStops := make([]*Stop, len(tripVisits))
-		for j := range tripVisits {
-			tripStops[j] = tripVisits[j].stop
-		}
-		trips[i].Stops = tripStops
-		visits[i] = nil
+	for i := range resumed {
+		rowsByTrip[i] = append([]T(nil), rowsByTrip[i]...)
 	}
+	return rowsByTrip
+}
+
+// stringInterner deduplicates strings read from CSV rows. Beyond saving
+// memory on repeated values, it copies each value out of its row: a string
+// sliced from a row keeps the whole row alive.
+type stringInterner map[string]string
+
+func (m stringInterner) intern(s string) string {
+	if s == "" {
+		return ""
+	}
+	if v, ok := m[s]; ok {
+		return v
+	}
+	s = strings.Clone(s)
+	m[s] = s
+	return s
 }
 
 func parseGtfsTimeToDuration(s string) (time.Duration, bool) {
