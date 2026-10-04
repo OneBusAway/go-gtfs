@@ -1475,3 +1475,30 @@ func TestParseStatic_ContinuousPickupDropOffDefaultToNo(t *testing.T) {
 		})
 	}
 }
+
+func TestParseStatic_StopTimeForUnknownTripIsSkipped(t *testing.T) {
+	// The unknown trip's row follows a known trip's row, so the parser has
+	// already started filling a trip when it meets the unknown ID.
+	feed := newZipBuilderWithDefaults().add(
+		"stop_times.txt",
+		"stop_id,trip_id,arrival_time,departure_time,stop_sequence",
+		"stop_id,trip_id,04:05:06,04:05:06,1",
+		"stop_id,no_such_trip,04:06:06,04:06:06,2",
+		"stop_id,trip_id,04:07:06,04:07:06,3",
+	).build()
+
+	result, err := ParseStatic(feed, ParseStaticOptions{})
+	if err != nil {
+		t.Fatalf("ParseStatic: %s", err)
+	}
+	if len(result.Trips) != 1 {
+		t.Fatalf("got %d trips, want 1", len(result.Trips))
+	}
+	var sequences []int
+	for _, st := range result.Trips[0].StopTimes {
+		sequences = append(sequences, st.StopSequence)
+	}
+	if diff := cmp.Diff([]int{1, 3}, sequences); diff != "" {
+		t.Errorf("stop sequences (-want +got):\n%s", diff)
+	}
+}

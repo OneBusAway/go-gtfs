@@ -126,6 +126,11 @@ type ScheduledTrip struct {
 	StopTimes            []ScheduledStopTime
 	Shape                *Shape
 	Frequencies          []Frequency
+
+	// Stops lists the stops the trip visits, in stop_sequence order. It is
+	// populated only when ParseStaticOptions.StopTimes is StopTimesStopsOnly,
+	// which leaves StopTimes empty; otherwise use StopTimes[i].Stop.
+	Stops []*Stop
 }
 
 type ScheduledStopTime struct {
@@ -165,7 +170,32 @@ type ParseStaticOptions struct {
 	// If true, wheelchair boarding information is inherited from parent station
 	// when unspecified for a child stop/platform, entrance, or exit.
 	InheritWheelchairBoarding bool
+
+	// If true, shapes.txt is not parsed: Static.Shapes and every
+	// ScheduledTrip.Shape are nil.
+	SkipShapes bool
+
+	// StopTimes controls how much of stop_times.txt is kept. Stop times
+	// dominate the memory of a parsed feed, so callers that do not need
+	// arrival and departure times can save most of it.
+	StopTimes StopTimesMode
 }
+
+// StopTimesMode controls how ParseStatic loads stop_times.txt.
+type StopTimesMode int
+
+const (
+	// StopTimesFull populates ScheduledTrip.StopTimes. This is the default.
+	StopTimesFull StopTimesMode = iota
+
+	// StopTimesStopsOnly populates ScheduledTrip.Stops, the trip's stops in
+	// stop_sequence order, and leaves ScheduledTrip.StopTimes nil. It keeps
+	// one pointer per stop time instead of a full ScheduledStopTime.
+	StopTimesStopsOnly
+
+	// StopTimesNone skips stop_times.txt entirely, which then need not exist.
+	StopTimesNone
+)
 
 // ParseStatic parses the content as a GTFS static feed.
 func ParseStatic(content []byte, opts ParseStaticOptions) (*Static, error) {
@@ -179,7 +209,12 @@ func ParseStatic(content []byte, opts ParseStaticOptions) (*Static, error) {
 		fileNameToFile[constants.StaticFile(file.Name)] = file
 	}
 	serviceIdToService := map[string]Service{}
-	shapeIdToShape := map[string]*Shape{}
+	// With SkipShapes the map stays nil, which tells parseScheduledTrips not
+	// to look up (and warn about) shape IDs that were never loaded.
+	var shapeIdToShape map[string]*Shape
+	if !opts.SkipShapes {
+		shapeIdToShape = map[string]*Shape{}
+	}
 	tripIdToScheduledTrip := map[string]*ScheduledTrip{}
 	timezone := time.UTC
 	for _, table := range []struct {
@@ -187,6 +222,7 @@ func ParseStatic(content []byte, opts ParseStaticOptions) (*Static, error) {
 		Action      func(file *csv.File) []warnings.StaticWarning
 		PostProcess func()
 		Optional    bool
+		Skip        bool
 	}{
 		{
 			File: constants.AgencyFile,
@@ -247,6 +283,7 @@ func ParseStatic(content []byte, opts ParseStaticOptions) (*Static, error) {
 				return
 			},
 			Optional: true,
+			Skip:     opts.SkipShapes,
 		},
 		{
 			File: "trips.txt",
@@ -277,11 +314,19 @@ func ParseStatic(content []byte, opts ParseStaticOptions) (*Static, error) {
 		{
 			File: "stop_times.txt",
 			Action: func(file *csv.File) (w []warnings.StaticWarning) {
-				parseScheduledStopTimes(file, result.Stops, result.Trips)
+				if opts.StopTimes == StopTimesStopsOnly {
+					parseTripStops(file, result.Stops, result.Trips)
+				} else {
+					parseScheduledStopTimes(file, result.Stops, result.Trips)
+				}
 				return
 			},
+			Skip: opts.StopTimes == StopTimesNone,
 		},
 	} {
+		if table.Skip {
+			continue
+		}
 		if table.PostProcess == nil {
 			table.PostProcess = func() {}
 		}
@@ -741,7 +786,7 @@ func parseScheduledTrips(csv *csv.File, routes []Route, services []Service, shap
 		}
 
 		shapeIDOrNil := shapeIDColumn.Read()
-		if shapeIDOrNil != "" {
+		if shapeIDOrNil != "" && shapeIDToShape != nil {
 			if shape, ok := shapeIDToShape[shapeIDOrNil]; ok {
 				trip.Shape = shape
 			} else {
@@ -784,18 +829,10 @@ func parseScheduledStopTimes(csv *csv.File, stops []Stop, trips []ScheduledTrip)
 		return
 	}
 
-	idToStop := map[string]*Stop{}
-	for i := range stops {
-		idToStop[stops[i].Id] = &stops[i]
-	}
-	idToTrip := map[string]*ScheduledTrip{}
-	for i := range trips {
-		idToTrip[trips[i].ID] = &trips[i]
-	}
-	var currentTrip *ScheduledTrip
-	var currentTripID string
+	idToStop := stopsByID(stops)
+	headsigns := stringInterner{}
 	var hasNonEmptyShapeDistRow = false
-	for csv.NextRow() {
+	stopTimesByTrip := readTripRows(csv, tripIDColumn, trips, func() (ScheduledStopTime, bool) {
 		arrival, arrivalOk := parseGtfsTimeToDuration(arrivalTimeColumn.Read())
 		departure, departureOk := parseGtfsTimeToDuration(departureTimeColumn.Read())
 
@@ -811,11 +848,11 @@ func parseScheduledStopTimes(csv *csv.File, stops []Stop, trips []ScheduledTrip)
 		stopSequence, err := strconv.Atoi(stopSequenceKey.Read())
 		if err != nil {
 			// TODO: log a warning
-			continue
+			return ScheduledStopTime{}, false
 		}
 		stopTime := ScheduledStopTime{
 			Stop:                  idToStop[stopIDColumn.Read()],
-			Headsign:              stopHeadsignColumn.Read(),
+			Headsign:              headsigns.intern(stopHeadsignColumn.Read()),
 			ArrivalTime:           arrival,
 			StopSequence:          stopSequence,
 			DepartureTime:         departure,
@@ -826,37 +863,150 @@ func parseScheduledStopTimes(csv *csv.File, stops []Stop, trips []ScheduledTrip)
 			ShapeDistanceTraveled: parseFloat64(shapeDistanceTraveledColumn.Read()),
 			ExactTimes:            timepointColumn.ReadOr("1") != "0",
 		}
-		tripID := tripIDColumn.Read()
-		if currentTrip == nil || currentTripID != tripID {
-			thisTrip := idToTrip[tripID]
-			if currentTrip != nil && cap(thisTrip.StopTimes) == 0 {
-				thisTrip.StopTimes = make([]ScheduledStopTime, 0, len(currentTrip.StopTimes))
+		return stopTime, stopTime.Stop != nil
+	})
+	for i, stopTimes := range stopTimesByTrip {
+		if len(stopTimes) == 0 {
+			continue
+		}
+		sort.Slice(stopTimes, func(a, b int) bool {
+			return stopTimes[a].StopSequence < stopTimes[b].StopSequence
+		})
+		if hasNonEmptyShapeDistRow {
+			trips[i].StopTimes = interpolateStopTimesByShapeDist(stopTimes)
+		} else {
+			trips[i].StopTimes = interpolateStopTimes(stopTimes)
+		}
+	}
+}
+
+type stopVisit struct {
+	sequence int
+	stop     *Stop
+}
+
+// parseTripStops is the StopTimesStopsOnly counterpart of
+// parseScheduledStopTimes: it applies the same row filtering and ordering but
+// keeps only each trip's sequence of stops.
+func parseTripStops(csv *csv.File, stops []Stop, trips []ScheduledTrip) {
+	stopIDColumn := csv.RequiredColumn("stop_id")
+	stopSequenceColumn := csv.RequiredColumn("stop_sequence")
+	tripIDColumn := csv.RequiredColumn("trip_id")
+	if err := csv.MissingRequiredColumns(); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	idToStop := stopsByID(stops)
+	visitsByTrip := readTripRows(csv, tripIDColumn, trips, func() (stopVisit, bool) {
+		stopSequence, err := strconv.Atoi(stopSequenceColumn.Read())
+		if err != nil {
+			return stopVisit{}, false
+		}
+		stop := idToStop[stopIDColumn.Read()]
+		return stopVisit{sequence: stopSequence, stop: stop}, stop != nil
+	})
+	for i, visits := range visitsByTrip {
+		if len(visits) == 0 {
+			continue
+		}
+		sort.Slice(visits, func(a, b int) bool {
+			return visits[a].sequence < visits[b].sequence
+		})
+		tripStops := make([]*Stop, len(visits))
+		for j := range visits {
+			tripStops[j] = visits[j].stop
+		}
+		trips[i].Stops = tripStops
+		visitsByTrip[i] = nil
+	}
+}
+
+func stopsByID(stops []Stop) map[string]*Stop {
+	idToStop := make(map[string]*Stop, len(stops))
+	for i := range stops {
+		idToStop[stops[i].Id] = &stops[i]
+	}
+	return idToStop
+}
+
+// readTripRows reads every row of a stop_times-shaped file and groups the
+// values readRow builds by trip, indexed like trips. Rows for which readRow
+// returns false, rows with missing required values, and rows for unknown
+// trips are dropped.
+//
+// Each trip's rows are buffered while they are contiguous in the file and
+// then copied into a slice of exactly that size, so the result carries no
+// slack capacity. A trip whose rows resume after another trip's grows by
+// append instead, and is trimmed to size once the file is read.
+func readTripRows[T any](f *csv.File, tripIDColumn csv.RequiredColumn, trips []ScheduledTrip, readRow func() (T, bool)) [][]T {
+	idToTripIndex := make(map[string]int, len(trips))
+	for i := range trips {
+		idToTripIndex[trips[i].ID] = i
+	}
+	rowsByTrip := make([][]T, len(trips))
+	resumed := map[int]bool{}
+	var pending []T
+	currentTrip := -1
+	var currentTripID string
+	flush := func() {
+		if currentTrip < 0 || len(pending) == 0 {
+			return
+		}
+		if rowsByTrip[currentTrip] == nil {
+			rowsByTrip[currentTrip] = make([]T, len(pending))
+			copy(rowsByTrip[currentTrip], pending)
+		} else {
+			rowsByTrip[currentTrip] = append(rowsByTrip[currentTrip], pending...)
+			resumed[currentTrip] = true
+		}
+		pending = pending[:0]
+	}
+	for f.NextRow() {
+		row, ok := readRow()
+		if !ok {
+			continue
+		}
+		// currentTripID starts out empty, which is safe: a row with an empty
+		// trip ID is dropped below for missing a required value.
+		if tripID := tripIDColumn.Read(); tripID != currentTripID {
+			flush()
+			currentTrip = -1
+			if i, ok := idToTripIndex[tripID]; ok {
+				currentTrip = i
 			}
-			currentTrip = thisTrip
 			currentTripID = tripID
 		}
-		if missingKeys := csv.MissingRowKeys(); len(missingKeys) > 0 {
+		if missingKeys := f.MissingRowKeys(); len(missingKeys) > 0 {
 			log.Printf("Skipping stop time because of missing keys %s", missingKeys)
 			continue
 		}
-		if stopTime.Stop == nil {
-			continue
-		}
-		if currentTrip == nil {
-			continue
-		}
-		currentTrip.StopTimes = append(currentTrip.StopTimes, stopTime)
-	}
-	for _, trip := range idToTrip {
-		sort.Slice(trip.StopTimes, func(i, j int) bool {
-			return trip.StopTimes[i].StopSequence < trip.StopTimes[j].StopSequence
-		})
-		if hasNonEmptyShapeDistRow {
-			trip.StopTimes = interpolateStopTimesByShapeDist(trip.StopTimes)
-		} else {
-			trip.StopTimes = interpolateStopTimes(trip.StopTimes)
+		if currentTrip >= 0 {
+			pending = append(pending, row)
 		}
 	}
+	flush()
+	for i := range resumed {
+		rowsByTrip[i] = append([]T(nil), rowsByTrip[i]...)
+	}
+	return rowsByTrip
+}
+
+// stringInterner deduplicates strings read from CSV rows. Beyond saving
+// memory on repeated values, it copies each value out of its row: a string
+// sliced from a row keeps the whole row alive.
+type stringInterner map[string]string
+
+func (m stringInterner) intern(s string) string {
+	if s == "" {
+		return ""
+	}
+	if v, ok := m[s]; ok {
+		return v
+	}
+	s = strings.Clone(s)
+	m[s] = s
+	return s
 }
 
 func parseGtfsTimeToDuration(s string) (time.Duration, bool) {

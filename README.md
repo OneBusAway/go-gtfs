@@ -36,6 +36,18 @@ staticData, _ := gtfs.ParseStatic(b, gtfs.ParseStaticOptions{})
 fmt.Printf("The New York City subway has %d routes and %d stations\n", len(staticData.Routes), len(staticData.Stops))
 ```
 
+Stop times take most of the memory of a parsed feed. If you don't need arrival and
+departure times or shapes, ask the parser to leave them out:
+
+```go
+staticData, _ := gtfs.ParseStatic(b, gtfs.ParseStaticOptions{
+	SkipShapes: true,
+	// Keep only the stops each trip visits, in trip.Stops.
+	// Use gtfs.StopTimesNone to skip stop_times.txt entirely.
+	StopTimes: gtfs.StopTimesStopsOnly,
+})
+```
+
 Parse the GTFS realtime feed for the San Francisco Bay Area BART:
 
 ```go
