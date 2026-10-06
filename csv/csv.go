@@ -7,6 +7,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/OneBusAway/go-gtfs/constants"
 	"golang.org/x/text/encoding"
@@ -46,7 +47,7 @@ func New(name constants.StaticFile, reader io.ReadCloser) (*File, error) {
 	}
 	m := map[string]int{}
 	for i, colHeader := range firstRow {
-		m[colHeader] = i
+		m[strings.TrimSpace(colHeader)] = i
 	}
 	return &File{
 		name:          name,
