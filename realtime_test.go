@@ -130,6 +130,7 @@ func TestRealtime(t *testing.T) {
 							ScheduleRelationship: gtfsrt.TripUpdate_StopTimeUpdate_NO_DATA,
 						},
 					},
+					EntityIndex:       1,
 					IsEntityInMessage: true,
 				}
 
@@ -138,6 +139,7 @@ func TestRealtime(t *testing.T) {
 						ID:                   tripID3,
 						ScheduleRelationship: gtfsrt.TripDescriptor_CANCELED,
 					},
+					EntityIndex:       2,
 					IsEntityInMessage: true,
 				}
 
@@ -215,6 +217,7 @@ func TestRealtime(t *testing.T) {
 						DirectionID: gtfs.DirectionID_Unspecified,
 					},
 					Delay:             &delayNeg30s,
+					EntityIndex:       1,
 					IsEntityInMessage: true,
 				}
 
@@ -223,6 +226,7 @@ func TestRealtime(t *testing.T) {
 						ID:          tripID3,
 						DirectionID: gtfs.DirectionID_Unspecified,
 					},
+					EntityIndex:       2,
 					IsEntityInMessage: true,
 				}
 
@@ -997,4 +1001,56 @@ func parseDirectionID_GTFSRealtimeRaw(d gtfs.DirectionID) *uint32 {
 
 func ptr[T any](t T) *T {
 	return &t
+}
+
+func TestRealtimeTripUpdateTimestampAndEntityIndex(t *testing.T) {
+	in := []*gtfsrt.FeedEntity{
+		{
+			Id: ptr("vehicle"),
+			Vehicle: &gtfsrt.VehiclePosition{
+				Trip:    &gtfsrt.TripDescriptor{TripId: ptr(tripID3)},
+				Vehicle: &gtfsrt.VehicleDescriptor{Id: ptr(vehicleID1)},
+			},
+		},
+		{
+			Id: ptr("later-in-sort-order"),
+			TripUpdate: &gtfsrt.TripUpdate{
+				Trip:      &gtfsrt.TripDescriptor{TripId: ptr(tripID2)},
+				Timestamp: ptr(uint64(time1.Unix())),
+			},
+		},
+		{
+			Id: ptr("earlier-in-sort-order"),
+			TripUpdate: &gtfsrt.TripUpdate{
+				Trip: &gtfsrt.TripDescriptor{TripId: ptr(tripID1)},
+			},
+		},
+	}
+	header := &gtfsrt.FeedHeader{
+		GtfsRealtimeVersion: ptr("2.0"),
+		Timestamp:           ptr(uint64(createTime.Unix())),
+	}
+	got := testutil.MustParse(t, header, in, &gtfs.ParseRealtimeOptions{})
+
+	tripsByID := map[string]gtfs.Trip{}
+	for _, trip := range got.Trips {
+		tripsByID[trip.ID.ID] = trip
+	}
+
+	if trip := tripsByID[tripID2]; trip.Timestamp == nil || !trip.Timestamp.Equal(time1) {
+		t.Errorf("trip %s timestamp = %v, want %v", tripID2, trip.Timestamp, time1)
+	}
+	if trip := tripsByID[tripID1]; trip.Timestamp != nil {
+		t.Errorf("trip %s timestamp = %v, want nil when the update omits it", tripID1, trip.Timestamp)
+	}
+	wantIndexes := map[string]int{tripID2: 1, tripID1: 2}
+	for tripID, want := range wantIndexes {
+		if got := tripsByID[tripID].EntityIndex; got != want {
+			t.Errorf("trip %s EntityIndex = %d, want %d", tripID, got, want)
+		}
+	}
+	if trip := tripsByID[tripID3]; trip.IsEntityInMessage || trip.EntityIndex != 0 {
+		t.Errorf("trip %s known only from a vehicle position: IsEntityInMessage=%v EntityIndex=%d, want false and 0",
+			tripID3, trip.IsEntityInMessage, trip.EntityIndex)
+	}
 }

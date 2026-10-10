@@ -31,6 +31,15 @@ type Trip struct {
 
 	Delay *time.Duration
 
+	// Timestamp is TripUpdate.timestamp, when the feed supplies it.
+	Timestamp *time.Time
+
+	// EntityIndex is the position, within the feed message, of the trip
+	// update entity this trip was parsed from. Trips are returned sorted by
+	// ID, so this is the only record of the feed's own order. It is zero for
+	// trips not parsed from a trip update (see IsEntityInMessage).
+	EntityIndex int
+
 	IsEntityInMessage bool
 }
 
@@ -305,6 +314,9 @@ func ParseRealtime(content []byte, opts *ParseRealtimeOptions) (*Realtime, error
 
 		if tripUpdate := entity.TripUpdate; tripUpdate != nil {
 			trip, vehicle, ok = parseTripUpdate(tripUpdate, opts)
+			if trip != nil {
+				trip.EntityIndex = i
+			}
 		} else if vehiclePosition := entity.Vehicle; vehiclePosition != nil {
 			trip, vehicle = parseVehicle(vehiclePosition, opts)
 			ok = true
@@ -383,6 +395,7 @@ func parseTripUpdate(tripUpdate *gtfsrt.TripUpdate, opts *ParseRealtimeOptions) 
 	}
 	trip := &Trip{
 		ID:                parseTripDescriptor(tripUpdate.Trip, opts),
+		Timestamp:         convertOptionalTimestamp(tripUpdate.Timestamp, opts.timezoneOrUTC()),
 		IsEntityInMessage: true,
 	}
 	if tripUpdate.Delay != nil {
