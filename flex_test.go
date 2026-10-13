@@ -259,6 +259,22 @@ func TestParseStatic_FlexStopTimeValidation(t *testing.T) {
 			}},
 		},
 		{
+			// A booking rule alone makes Flex non-nil without making the row
+			// on-demand.
+			desc: "timed stop with a booking rule",
+			row:  "trip_id,1,stop_1,,,08:00:00,08:00:00,,,,,br_1,,1",
+			wantStopTimes: []ScheduledStopTime{{
+				Stop:              flexStop1(),
+				StopSequence:      1,
+				ArrivalTime:       8 * time.Hour,
+				DepartureTime:     8 * time.Hour,
+				ContinuousPickup:  PickupDropOffPolicy_No,
+				ContinuousDropOff: PickupDropOffPolicy_No,
+				ExactTimes:        true,
+				Flex:              &FlexStopTime{PickupBookingRule: flexBookingRule1()},
+			}},
+		},
+		{
 			desc:        "timed stop with unknown booking rule keeps the row",
 			row:         "trip_id,1,stop_1,,,08:00:00,08:00:00,,,,,br_x,,1",
 			wantWarning: warnings.StopTimeInvalidReference{Reason: `unknown pickup_booking_rule_id "br_x"`},
@@ -676,5 +692,12 @@ func TestScheduledStopTime_FlexAccessorsOnFixedRow(t *testing.T) {
 	}
 	if st.IsWindowed() || st.IsFlex() {
 		t.Error("a record without Flex columns is neither windowed nor flex")
+	}
+}
+
+func TestScheduledStopTime_BookingRuleAloneIsNotFlex(t *testing.T) {
+	st := ScheduledStopTime{Stop: flexStop1(), Flex: &FlexStopTime{PickupBookingRule: flexBookingRule1()}}
+	if st.IsFlex() || st.IsWindowed() {
+		t.Error("a timed stop row with only a booking rule is neither flex nor windowed")
 	}
 }
