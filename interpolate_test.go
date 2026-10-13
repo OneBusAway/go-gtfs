@@ -200,10 +200,10 @@ func TestScheduledStopTime_IsWindowedAndIsFlex(t *testing.T) {
 		wantFlex     bool
 	}{
 		{desc: "timed stop", st: ScheduledStopTime{Stop: &Stop{Id: "s"}}, wantWindowed: false, wantFlex: false},
-		{desc: "windowed stop", st: ScheduledStopTime{Stop: &Stop{Id: "s"}, StartPickupDropOffWindow: &window, EndPickupDropOffWindow: &window}, wantWindowed: true, wantFlex: true},
-		{desc: "only start window", st: ScheduledStopTime{StartPickupDropOffWindow: &window}, wantWindowed: false, wantFlex: false},
-		{desc: "location without windows", st: ScheduledStopTime{Location: &Location{Id: "l"}}, wantWindowed: false, wantFlex: true},
-		{desc: "group without windows", st: ScheduledStopTime{LocationGroup: &LocationGroup{Id: "g"}}, wantWindowed: false, wantFlex: true},
+		{desc: "windowed stop", st: ScheduledStopTime{Stop: &Stop{Id: "s"}, Flex: &FlexStopTime{StartPickupDropOffWindow: &window, EndPickupDropOffWindow: &window}}, wantWindowed: true, wantFlex: true},
+		{desc: "only start window", st: ScheduledStopTime{Flex: &FlexStopTime{StartPickupDropOffWindow: &window}}, wantWindowed: false, wantFlex: false},
+		{desc: "location without windows", st: ScheduledStopTime{Flex: &FlexStopTime{Location: &Location{Id: "l"}}}, wantWindowed: false, wantFlex: true},
+		{desc: "group without windows", st: ScheduledStopTime{Flex: &FlexStopTime{LocationGroup: &LocationGroup{Id: "g"}}}, wantWindowed: false, wantFlex: true},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			if got := tc.st.IsWindowed(); got != tc.wantWindowed {
@@ -220,9 +220,9 @@ func TestInterpolateTimedStopTimes_SkipsWindowedRecords(t *testing.T) {
 	window := dur("08:00:00")
 	st := []ScheduledStopTime{
 		{StopSequence: 1, ArrivalTime: dur("08:00:00"), DepartureTime: dur("08:00:00"), ExactTimes: true},
-		{StopSequence: 2, StartPickupDropOffWindow: &window, EndPickupDropOffWindow: &window},
+		{StopSequence: 2, Flex: &FlexStopTime{StartPickupDropOffWindow: &window, EndPickupDropOffWindow: &window}},
 		{StopSequence: 3},
-		{StopSequence: 4, StartPickupDropOffWindow: &window, EndPickupDropOffWindow: &window},
+		{StopSequence: 4, Flex: &FlexStopTime{StartPickupDropOffWindow: &window, EndPickupDropOffWindow: &window}},
 		{StopSequence: 5, ArrivalTime: dur("08:40:00"), DepartureTime: dur("08:40:00"), ExactTimes: true},
 	}
 	got := interpolateTimedStopTimes(st, false)
@@ -254,7 +254,7 @@ func TestInterpolateTimedStopTimes_ByShapeDistanceIgnoresWindowedRecordWithoutDi
 	window := dur("08:00:00")
 	st := []ScheduledStopTime{
 		{StopSequence: 1, ArrivalTime: dur("08:00:00"), DepartureTime: dur("08:00:00"), ShapeDistanceTraveled: ptr(0.0)},
-		{StopSequence: 2, StartPickupDropOffWindow: &window, EndPickupDropOffWindow: &window},
+		{StopSequence: 2, Flex: &FlexStopTime{StartPickupDropOffWindow: &window, EndPickupDropOffWindow: &window}},
 		{StopSequence: 3, ShapeDistanceTraveled: ptr(7.5)},
 		{StopSequence: 4, ArrivalTime: dur("08:40:00"), DepartureTime: dur("08:40:00"), ShapeDistanceTraveled: ptr(10.0)},
 	}
@@ -270,8 +270,8 @@ func TestInterpolateTimedStopTimes_ByShapeDistanceIgnoresWindowedRecordWithoutDi
 func TestInterpolateTimedStopTimes_AllWindowedIsUnchanged(t *testing.T) {
 	window := dur("08:00:00")
 	st := []ScheduledStopTime{
-		{StopSequence: 1, StartPickupDropOffWindow: &window, EndPickupDropOffWindow: &window},
-		{StopSequence: 2, StartPickupDropOffWindow: &window, EndPickupDropOffWindow: &window},
+		{StopSequence: 1, Flex: &FlexStopTime{StartPickupDropOffWindow: &window, EndPickupDropOffWindow: &window}},
+		{StopSequence: 2, Flex: &FlexStopTime{StartPickupDropOffWindow: &window, EndPickupDropOffWindow: &window}},
 	}
 	got := interpolateTimedStopTimes(st, true)
 	if len(got) != 2 || got[0].StopSequence != 1 || got[1].StopSequence != 2 {
