@@ -102,9 +102,12 @@ Feeds that use [GTFS-Flex](https://gtfs.org/community/extensions/flex/) now pars
 `stop_times.txt` rows appear on trips alongside ordinary ones. Code written against
 earlier versions should note:
 
-- `ScheduledStopTime.Stop` may be nil. A flex row references a `Location` or a
-  `LocationGroup` instead; exactly one of `Stop`, `Location` and `LocationGroup` is set.
-- A windowed row (one with `StartPickupDropOffWindow`/`EndPickupDropOffWindow`) has
+- A row's GTFS-Flex columns are on `ScheduledStopTime.Flex`, a `*FlexStopTime` that is
+  nil when the row sets none of them. Accessors such as `Location()` and
+  `PickupBookingRule()` return nil in that case, so callers need not check `Flex` first.
+- `ScheduledStopTime.Stop` may be nil. A flex row references a `Flex.Location` or a
+  `Flex.LocationGroup` instead; exactly one of `Stop`, `Location` and `LocationGroup` is set.
+- A windowed row (one with `Flex.StartPickupDropOffWindow`/`EndPickupDropOffWindow`) has
   zero `ArrivalTime` and `DepartureTime` and `ExactTimes == false`. Interpolation
   leaves these rows alone.
 - Code that expects fixed-stop, fixed-time service should skip flex rows with

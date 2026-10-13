@@ -106,32 +106,36 @@ func TestParseStatic_FlexStopTimeValidation(t *testing.T) {
 			desc: "zone record",
 			row:  "trip_id,1,,zone_a,,,,08:00:00,17:00:00,2,1,br_1,br_1,",
 			wantStopTimes: []ScheduledStopTime{{
-				Location:                 flexZoneA(),
-				StopSequence:             1,
-				StartPickupDropOffWindow: hhmm(8, 0),
-				EndPickupDropOffWindow:   hhmm(17, 0),
-				PickupType:               PickupDropOffPolicy_PhoneAgency,
-				DropOffType:              PickupDropOffPolicy_No,
-				ContinuousPickup:         PickupDropOffPolicy_No,
-				ContinuousDropOff:        PickupDropOffPolicy_No,
-				PickupBookingRule:        flexBookingRule1(),
-				DropOffBookingRule:       flexBookingRule1(),
-				ExactTimes:               false,
+				StopSequence:      1,
+				PickupType:        PickupDropOffPolicy_PhoneAgency,
+				DropOffType:       PickupDropOffPolicy_No,
+				ContinuousPickup:  PickupDropOffPolicy_No,
+				ContinuousDropOff: PickupDropOffPolicy_No,
+				ExactTimes:        false,
+				Flex: &FlexStopTime{
+					Location:                 flexZoneA(),
+					StartPickupDropOffWindow: hhmm(8, 0),
+					EndPickupDropOffWindow:   hhmm(17, 0),
+					PickupBookingRule:        flexBookingRule1(),
+					DropOffBookingRule:       flexBookingRule1(),
+				},
 			}},
 		},
 		{
 			desc: "group record",
 			row:  "trip_id,1,,,group_1,,,08:00:00,17:00:00,1,2,,br_1,",
 			wantStopTimes: []ScheduledStopTime{{
-				LocationGroup:            flexGroup1(),
-				StopSequence:             1,
-				StartPickupDropOffWindow: hhmm(8, 0),
-				EndPickupDropOffWindow:   hhmm(17, 0),
-				PickupType:               PickupDropOffPolicy_No,
-				DropOffType:              PickupDropOffPolicy_PhoneAgency,
-				ContinuousPickup:         PickupDropOffPolicy_No,
-				ContinuousDropOff:        PickupDropOffPolicy_No,
-				DropOffBookingRule:       flexBookingRule1(),
+				StopSequence:      1,
+				PickupType:        PickupDropOffPolicy_No,
+				DropOffType:       PickupDropOffPolicy_PhoneAgency,
+				ContinuousPickup:  PickupDropOffPolicy_No,
+				ContinuousDropOff: PickupDropOffPolicy_No,
+				Flex: &FlexStopTime{
+					LocationGroup:            flexGroup1(),
+					StartPickupDropOffWindow: hhmm(8, 0),
+					EndPickupDropOffWindow:   hhmm(17, 0),
+					DropOffBookingRule:       flexBookingRule1(),
+				},
 			}},
 		},
 		{
@@ -140,15 +144,17 @@ func TestParseStatic_FlexStopTimeValidation(t *testing.T) {
 			desc: "windowed stop record ignores timepoint",
 			row:  "trip_id,1,stop_1,,,,,08:00:00,17:00:00,2,2,,,1",
 			wantStopTimes: []ScheduledStopTime{{
-				Stop:                     flexStop1(),
-				StopSequence:             1,
-				StartPickupDropOffWindow: hhmm(8, 0),
-				EndPickupDropOffWindow:   hhmm(17, 0),
-				PickupType:               PickupDropOffPolicy_PhoneAgency,
-				DropOffType:              PickupDropOffPolicy_PhoneAgency,
-				ContinuousPickup:         PickupDropOffPolicy_No,
-				ContinuousDropOff:        PickupDropOffPolicy_No,
-				ExactTimes:               false,
+				Stop:              flexStop1(),
+				StopSequence:      1,
+				PickupType:        PickupDropOffPolicy_PhoneAgency,
+				DropOffType:       PickupDropOffPolicy_PhoneAgency,
+				ContinuousPickup:  PickupDropOffPolicy_No,
+				ContinuousDropOff: PickupDropOffPolicy_No,
+				ExactTimes:        false,
+				Flex: &FlexStopTime{
+					StartPickupDropOffWindow: hhmm(8, 0),
+					EndPickupDropOffWindow:   hhmm(17, 0),
+				},
 			}},
 		},
 		{
@@ -213,14 +219,16 @@ func TestParseStatic_FlexStopTimeValidation(t *testing.T) {
 			desc: "zero-length window",
 			row:  "trip_id,1,,zone_a,,,,08:00:00,08:00:00,2,1,,,",
 			wantStopTimes: []ScheduledStopTime{{
-				Location:                 flexZoneA(),
-				StopSequence:             1,
-				StartPickupDropOffWindow: hhmm(8, 0),
-				EndPickupDropOffWindow:   hhmm(8, 0),
-				PickupType:               PickupDropOffPolicy_PhoneAgency,
-				DropOffType:              PickupDropOffPolicy_No,
-				ContinuousPickup:         PickupDropOffPolicy_No,
-				ContinuousDropOff:        PickupDropOffPolicy_No,
+				StopSequence:      1,
+				PickupType:        PickupDropOffPolicy_PhoneAgency,
+				DropOffType:       PickupDropOffPolicy_No,
+				ContinuousPickup:  PickupDropOffPolicy_No,
+				ContinuousDropOff: PickupDropOffPolicy_No,
+				Flex: &FlexStopTime{
+					Location:                 flexZoneA(),
+					StartPickupDropOffWindow: hhmm(8, 0),
+					EndPickupDropOffWindow:   hhmm(8, 0),
+				},
 			}},
 		},
 		{
@@ -238,14 +246,16 @@ func TestParseStatic_FlexStopTimeValidation(t *testing.T) {
 			row:         "trip_id,1,,zone_a,,,,08:00:00,17:00:00,2,1,br_x,,",
 			wantWarning: warnings.StopTimeInvalidReference{Reason: `unknown pickup_booking_rule_id "br_x"`},
 			wantStopTimes: []ScheduledStopTime{{
-				Location:                 flexZoneA(),
-				StopSequence:             1,
-				StartPickupDropOffWindow: hhmm(8, 0),
-				EndPickupDropOffWindow:   hhmm(17, 0),
-				PickupType:               PickupDropOffPolicy_PhoneAgency,
-				DropOffType:              PickupDropOffPolicy_No,
-				ContinuousPickup:         PickupDropOffPolicy_No,
-				ContinuousDropOff:        PickupDropOffPolicy_No,
+				StopSequence:      1,
+				PickupType:        PickupDropOffPolicy_PhoneAgency,
+				DropOffType:       PickupDropOffPolicy_No,
+				ContinuousPickup:  PickupDropOffPolicy_No,
+				ContinuousDropOff: PickupDropOffPolicy_No,
+				Flex: &FlexStopTime{
+					Location:                 flexZoneA(),
+					StartPickupDropOffWindow: hhmm(8, 0),
+					EndPickupDropOffWindow:   hhmm(17, 0),
+				},
 			}},
 		},
 		{
@@ -267,14 +277,16 @@ func TestParseStatic_FlexStopTimeValidation(t *testing.T) {
 			row:         "trip_id,1,,zone_a,,,,08:00:00,17:00:00,2,1,,br_x,",
 			wantWarning: warnings.StopTimeInvalidReference{Reason: `unknown drop_off_booking_rule_id "br_x"`},
 			wantStopTimes: []ScheduledStopTime{{
-				Location:                 flexZoneA(),
-				StopSequence:             1,
-				StartPickupDropOffWindow: hhmm(8, 0),
-				EndPickupDropOffWindow:   hhmm(17, 0),
-				PickupType:               PickupDropOffPolicy_PhoneAgency,
-				DropOffType:              PickupDropOffPolicy_No,
-				ContinuousPickup:         PickupDropOffPolicy_No,
-				ContinuousDropOff:        PickupDropOffPolicy_No,
+				StopSequence:      1,
+				PickupType:        PickupDropOffPolicy_PhoneAgency,
+				DropOffType:       PickupDropOffPolicy_No,
+				ContinuousPickup:  PickupDropOffPolicy_No,
+				ContinuousDropOff: PickupDropOffPolicy_No,
+				Flex: &FlexStopTime{
+					Location:                 flexZoneA(),
+					StartPickupDropOffWindow: hhmm(8, 0),
+					EndPickupDropOffWindow:   hhmm(17, 0),
+				},
 			}},
 		},
 	} {
@@ -328,7 +340,7 @@ func TestParseStatic_FlexStopIDColumnAbsent(t *testing.T) {
 	if got := len(static.Trips[0].StopTimes); got != 2 {
 		t.Fatalf("got %d stop times, want 2", got)
 	}
-	if static.Trips[0].StopTimes[0].Location != static.Trips[0].StopTimes[1].Location {
+	if static.Trips[0].StopTimes[0].Flex.Location != static.Trips[0].StopTimes[1].Flex.Location {
 		t.Error("both records must point at the same *Location")
 	}
 }
@@ -345,11 +357,11 @@ func TestParseStatic_DraftSafeDurationOnStopTimes(t *testing.T) {
 		t.Fatalf("ParseStatic() got error %v, want nil", err)
 	}
 	stopTime := static.Trips[0].StopTimes[0]
-	if stopTime.SafeDurationFactor == nil || *stopTime.SafeDurationFactor != 1.0 {
-		t.Errorf("SafeDurationFactor = %v, want 1.0", stopTime.SafeDurationFactor)
+	if stopTime.Flex.SafeDurationFactor == nil || *stopTime.Flex.SafeDurationFactor != 1.0 {
+		t.Errorf("SafeDurationFactor = %v, want 1.0", stopTime.Flex.SafeDurationFactor)
 	}
-	if stopTime.SafeDurationOffset == nil || *stopTime.SafeDurationOffset != 0.0 {
-		t.Errorf("SafeDurationOffset = %v, want 0.0", stopTime.SafeDurationOffset)
+	if stopTime.Flex.SafeDurationOffset == nil || *stopTime.Flex.SafeDurationOffset != 0.0 {
+		t.Errorf("SafeDurationOffset = %v, want 0.0", stopTime.Flex.SafeDurationOffset)
 	}
 	if static.Trips[0].SafeDurationFactor != nil {
 		t.Error("trips.txt has no safe_duration_factor column; ScheduledTrip.SafeDurationFactor must stay nil")
@@ -369,28 +381,42 @@ func TestParseStatic_FlexFeeds(t *testing.T) {
 		static := parseFlexFeed(t, content)
 		want := []ScheduledStopTime{
 			{
-				Location: flexZoneA(), StopSequence: 1,
-				StartPickupDropOffWindow: hhmm(8, 0), EndPickupDropOffWindow: hhmm(17, 0),
-				PickupType: PickupDropOffPolicy_PhoneAgency, DropOffType: PickupDropOffPolicy_No,
-				ContinuousPickup: PickupDropOffPolicy_No, ContinuousDropOff: PickupDropOffPolicy_No,
-				PickupBookingRule: flexBookingRule1(), DropOffBookingRule: flexBookingRule1(),
+				StopSequence:      1,
+				PickupType:        PickupDropOffPolicy_PhoneAgency,
+				DropOffType:       PickupDropOffPolicy_No,
+				ContinuousPickup:  PickupDropOffPolicy_No,
+				ContinuousDropOff: PickupDropOffPolicy_No,
+				Flex: &FlexStopTime{
+					Location:                 flexZoneA(),
+					StartPickupDropOffWindow: hhmm(8, 0),
+					EndPickupDropOffWindow:   hhmm(17, 0),
+					PickupBookingRule:        flexBookingRule1(),
+					DropOffBookingRule:       flexBookingRule1(),
+				},
 			},
 			{
-				Location: flexZoneA(), StopSequence: 2,
-				StartPickupDropOffWindow: hhmm(8, 0), EndPickupDropOffWindow: hhmm(17, 0),
-				PickupType: PickupDropOffPolicy_No, DropOffType: PickupDropOffPolicy_PhoneAgency,
-				ContinuousPickup: PickupDropOffPolicy_No, ContinuousDropOff: PickupDropOffPolicy_No,
-				PickupBookingRule: flexBookingRule1(), DropOffBookingRule: flexBookingRule1(),
+				StopSequence:      2,
+				PickupType:        PickupDropOffPolicy_No,
+				DropOffType:       PickupDropOffPolicy_PhoneAgency,
+				ContinuousPickup:  PickupDropOffPolicy_No,
+				ContinuousDropOff: PickupDropOffPolicy_No,
+				Flex: &FlexStopTime{
+					Location:                 flexZoneA(),
+					StartPickupDropOffWindow: hhmm(8, 0),
+					EndPickupDropOffWindow:   hhmm(17, 0),
+					PickupBookingRule:        flexBookingRule1(),
+					DropOffBookingRule:       flexBookingRule1(),
+				},
 			},
 		}
 		if diff := cmp.Diff(static.Trips[0].StopTimes, want); diff != "" {
 			t.Errorf("StopTimes mismatch (-got +want):\n%s", diff)
 		}
 		stopTimes := static.Trips[0].StopTimes
-		if stopTimes[0].Location != stopTimes[1].Location || stopTimes[0].Location != &static.Locations[0] {
+		if stopTimes[0].Flex.Location != stopTimes[1].Flex.Location || stopTimes[0].Flex.Location != &static.Locations[0] {
 			t.Error("records must share the *Location stored in Static.Locations")
 		}
-		if stopTimes[0].PickupBookingRule != &static.BookingRules[0] {
+		if stopTimes[0].Flex.PickupBookingRule != &static.BookingRules[0] {
 			t.Error("records must point at the *BookingRule stored in Static.BookingRules")
 		}
 		for _, st := range stopTimes {
@@ -413,14 +439,14 @@ func TestParseStatic_FlexFeeds(t *testing.T) {
 		if len(stopTimes) != 2 {
 			t.Fatalf("got %d stop times, want 2", len(stopTimes))
 		}
-		if diff := cmp.Diff(stopTimes[0].Location, flexZoneA()); diff != "" {
+		if diff := cmp.Diff(stopTimes[0].Flex.Location, flexZoneA()); diff != "" {
 			t.Errorf("record 1 location (-got +want):\n%s", diff)
 		}
-		if diff := cmp.Diff(stopTimes[1].Location, flexZoneB()); diff != "" {
+		if diff := cmp.Diff(stopTimes[1].Flex.Location, flexZoneB()); diff != "" {
 			t.Errorf("record 2 location (-got +want):\n%s", diff)
 		}
-		if len(stopTimes[1].Location.Geometry.Polygons) != 2 {
-			t.Errorf("zone_b is a MultiPolygon with 2 polygons, got %d", len(stopTimes[1].Location.Geometry.Polygons))
+		if len(stopTimes[1].Flex.Location.Geometry.Polygons) != 2 {
+			t.Errorf("zone_b is a MultiPolygon with 2 polygons, got %d", len(stopTimes[1].Flex.Location.Geometry.Polygons))
 		}
 	})
 
@@ -448,13 +474,13 @@ func TestParseStatic_FlexFeeds(t *testing.T) {
 			t.Fatalf("got %d stop times, want 2", len(stopTimes))
 		}
 		for _, st := range stopTimes {
-			if st.LocationGroup != &static.LocationGroups[0] {
+			if st.Flex.LocationGroup != &static.LocationGroups[0] {
 				t.Errorf("record %d must point at Static.LocationGroups[0]", st.StopSequence)
 			}
 			if st.PickupType != PickupDropOffPolicy_Yes || st.DropOffType != PickupDropOffPolicy_Yes {
 				t.Errorf("record %d pickup/drop-off = %v/%v, want ALLOWED/ALLOWED", st.StopSequence, st.PickupType, st.DropOffType)
 			}
-			if st.Stop != nil || st.Location != nil {
+			if st.Stop != nil || st.Flex.Location != nil {
 				t.Errorf("record %d must reference only the group", st.StopSequence)
 			}
 		}
@@ -609,14 +635,14 @@ func TestParseStatic_AlexandriaExcerpt(t *testing.T) {
 			t.Fatalf("trip %s: got %d stop times, want 2", trip.ID, len(trip.StopTimes))
 		}
 		for _, st := range trip.StopTimes {
-			if st.Location != &static.Locations[0] {
+			if st.Flex.Location != &static.Locations[0] {
 				t.Errorf("trip %s seq %d: Location must be area_1449", trip.ID, st.StopSequence)
 			}
-			if st.PickupBookingRule != &static.BookingRules[0] || st.DropOffBookingRule != &static.BookingRules[0] {
+			if st.Flex.PickupBookingRule != &static.BookingRules[0] || st.Flex.DropOffBookingRule != &static.BookingRules[0] {
 				t.Errorf("trip %s seq %d: booking rules must resolve to booking_route_77652", trip.ID, st.StopSequence)
 			}
-			if st.SafeDurationFactor == nil || *st.SafeDurationFactor != 1.0 || st.SafeDurationOffset == nil || *st.SafeDurationOffset != 0.0 {
-				t.Errorf("trip %s seq %d: draft-era safe duration = %v/%v, want 1.0/0.0", trip.ID, st.StopSequence, st.SafeDurationFactor, st.SafeDurationOffset)
+			if st.Flex.SafeDurationFactor == nil || *st.Flex.SafeDurationFactor != 1.0 || st.Flex.SafeDurationOffset == nil || *st.Flex.SafeDurationOffset != 0.0 {
+				t.Errorf("trip %s seq %d: draft-era safe duration = %v/%v, want 1.0/0.0", trip.ID, st.StopSequence, st.Flex.SafeDurationFactor, st.Flex.SafeDurationOffset)
 			}
 			if st.ExactTimes || !st.IsWindowed() {
 				t.Errorf("trip %s seq %d: ExactTimes=%v IsWindowed()=%v, want false/true", trip.ID, st.StopSequence, st.ExactTimes, st.IsWindowed())
@@ -626,16 +652,29 @@ func TestParseStatic_AlexandriaExcerpt(t *testing.T) {
 	// trips.txt file order: t_6124961 (Mon–Sat, 05:00–24:50 then 05:00–25:00)
 	// first, then t_6124409 (Sun, 07:00–24:50 then 07:00–25:00).
 	weekdays, sunday := static.Trips[0], static.Trips[1]
-	if diff := cmp.Diff(weekdays.StopTimes[0].StartPickupDropOffWindow, hhmm(5, 0)); diff != "" {
+	if diff := cmp.Diff(weekdays.StopTimes[0].Flex.StartPickupDropOffWindow, hhmm(5, 0)); diff != "" {
 		t.Errorf("weekday start window (-got +want):\n%s", diff)
 	}
-	if diff := cmp.Diff(weekdays.StopTimes[0].EndPickupDropOffWindow, hhmm(24, 50)); diff != "" {
+	if diff := cmp.Diff(weekdays.StopTimes[0].Flex.EndPickupDropOffWindow, hhmm(24, 50)); diff != "" {
 		t.Errorf("weekday end window (-got +want):\n%s", diff)
 	}
-	if diff := cmp.Diff(weekdays.StopTimes[1].EndPickupDropOffWindow, hhmm(25, 0)); diff != "" {
+	if diff := cmp.Diff(weekdays.StopTimes[1].Flex.EndPickupDropOffWindow, hhmm(25, 0)); diff != "" {
 		t.Errorf("weekday drop-off end window (-got +want):\n%s", diff)
 	}
-	if diff := cmp.Diff(sunday.StopTimes[0].StartPickupDropOffWindow, hhmm(7, 0)); diff != "" {
+	if diff := cmp.Diff(sunday.StopTimes[0].Flex.StartPickupDropOffWindow, hhmm(7, 0)); diff != "" {
 		t.Errorf("sunday start window (-got +want):\n%s", diff)
+	}
+}
+
+func TestScheduledStopTime_FlexAccessorsOnFixedRow(t *testing.T) {
+	var st ScheduledStopTime
+	if st.Location() != nil || st.LocationGroup() != nil ||
+		st.StartPickupDropOffWindow() != nil || st.EndPickupDropOffWindow() != nil ||
+		st.PickupBookingRule() != nil || st.DropOffBookingRule() != nil ||
+		st.SafeDurationFactor() != nil || st.SafeDurationOffset() != nil {
+		t.Error("a record without Flex columns must return nil from every Flex accessor")
+	}
+	if st.IsWindowed() || st.IsFlex() {
+		t.Error("a record without Flex columns is neither windowed nor flex")
 	}
 }

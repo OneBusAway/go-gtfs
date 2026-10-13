@@ -159,8 +159,15 @@ type ScheduledStopTime struct {
 	ContinuousDropOff     PickupDropOffPolicy
 	ShapeDistanceTraveled *float64
 	ExactTimes            bool
+	// Flex holds the row's GTFS-Flex columns, or is nil when it sets none.
+	// Most feeds have no Flex rows, so keeping these fields out of line saves
+	// memory on every stop time.
+	Flex *FlexStopTime
+}
 
-	// GTFS-Flex. Exactly one of Stop, Location and LocationGroup is set.
+// FlexStopTime holds the GTFS-Flex columns of a stop_times.txt row. Exactly
+// one of ScheduledStopTime.Stop, Location and LocationGroup is set.
+type FlexStopTime struct {
 	Location                 *Location
 	LocationGroup            *LocationGroup
 	StartPickupDropOffWindow *time.Duration
@@ -176,12 +183,83 @@ type ScheduledStopTime struct {
 // IsWindowed reports whether the record carries a pickup/drop-off window
 // instead of arrival/departure times.
 func (st ScheduledStopTime) IsWindowed() bool {
-	return st.StartPickupDropOffWindow != nil && st.EndPickupDropOffWindow != nil
+	return st.StartPickupDropOffWindow() != nil && st.EndPickupDropOffWindow() != nil
 }
 
 // IsFlex reports whether the record is an on-demand (GTFS-Flex) record.
 func (st ScheduledStopTime) IsFlex() bool {
-	return st.IsWindowed() || st.Location != nil || st.LocationGroup != nil
+	return st.IsWindowed() || st.Location() != nil || st.LocationGroup() != nil
+}
+
+// The accessors below return a GTFS-Flex field, or nil when the record has
+// no Flex columns.
+
+// Location returns the GTFS-Flex zone the record serves, or nil.
+func (st ScheduledStopTime) Location() *Location {
+	if st.Flex == nil {
+		return nil
+	}
+	return st.Flex.Location
+}
+
+// LocationGroup returns the location group the record serves, or nil.
+func (st ScheduledStopTime) LocationGroup() *LocationGroup {
+	if st.Flex == nil {
+		return nil
+	}
+	return st.Flex.LocationGroup
+}
+
+// StartPickupDropOffWindow returns the start of the record's pickup/drop-off
+// window, or nil.
+func (st ScheduledStopTime) StartPickupDropOffWindow() *time.Duration {
+	if st.Flex == nil {
+		return nil
+	}
+	return st.Flex.StartPickupDropOffWindow
+}
+
+// EndPickupDropOffWindow returns the end of the record's pickup/drop-off
+// window, or nil.
+func (st ScheduledStopTime) EndPickupDropOffWindow() *time.Duration {
+	if st.Flex == nil {
+		return nil
+	}
+	return st.Flex.EndPickupDropOffWindow
+}
+
+// PickupBookingRule returns the booking rule for boarding, or nil.
+func (st ScheduledStopTime) PickupBookingRule() *BookingRule {
+	if st.Flex == nil {
+		return nil
+	}
+	return st.Flex.PickupBookingRule
+}
+
+// DropOffBookingRule returns the booking rule for alighting, or nil.
+func (st ScheduledStopTime) DropOffBookingRule() *BookingRule {
+	if st.Flex == nil {
+		return nil
+	}
+	return st.Flex.DropOffBookingRule
+}
+
+// SafeDurationFactor returns the draft-era stop_times.txt
+// safe_duration_factor, or nil.
+func (st ScheduledStopTime) SafeDurationFactor() *float64 {
+	if st.Flex == nil {
+		return nil
+	}
+	return st.Flex.SafeDurationFactor
+}
+
+// SafeDurationOffset returns the draft-era stop_times.txt
+// safe_duration_offset, or nil.
+func (st ScheduledStopTime) SafeDurationOffset() *float64 {
+	if st.Flex == nil {
+		return nil
+	}
+	return st.Flex.SafeDurationOffset
 }
 
 type ShapePoint struct {
@@ -1306,8 +1384,6 @@ func (r *stopTimeReader) read() (ScheduledStopTime, bool) {
 	}
 	stopTime := ScheduledStopTime{
 		Stop:                  place.stop,
-		Location:              place.location,
-		LocationGroup:         place.group,
 		Headsign:              r.headsigns.intern(r.stopHeadsignColumn.Read()),
 		ArrivalTime:           arrival,
 		DepartureTime:         departure,
@@ -1318,13 +1394,17 @@ func (r *stopTimeReader) read() (ScheduledStopTime, bool) {
 		ContinuousDropOff:     parsePickupDropOffPolicy(r.continuousDropOffColumn.ReadOr("")),
 		ShapeDistanceTraveled: parseFloat64(r.shapeDistanceTraveledColumn.Read()),
 		// A windowed record has no exact time whatever timepoint says.
-		ExactTimes:               !windowed && r.timepointColumn.ReadOr("1") != "0",
-		StartPickupDropOffWindow: startWindow,
-		EndPickupDropOffWindow:   endWindow,
-		PickupBookingRule:        pickupRule,
-		DropOffBookingRule:       dropOffRule,
-		SafeDurationFactor:       parseFloat64(r.safeDurationFactorColumn.Read()),
-		SafeDurationOffset:       parseFloat64(r.safeDurationOffsetColumn.Read()),
+		ExactTimes: !windowed && r.timepointColumn.ReadOr("1") != "0",
+		Flex: newFlexStopTime(FlexStopTime{
+			Location:                 place.location,
+			LocationGroup:            place.group,
+			StartPickupDropOffWindow: startWindow,
+			EndPickupDropOffWindow:   endWindow,
+			PickupBookingRule:        pickupRule,
+			DropOffBookingRule:       dropOffRule,
+			SafeDurationFactor:       parseFloat64(r.safeDurationFactorColumn.Read()),
+			SafeDurationOffset:       parseFloat64(r.safeDurationOffsetColumn.Read()),
+		}),
 	}
 	return stopTime, true
 }
@@ -1487,6 +1567,18 @@ func (m stringInterner) intern(s string) string {
 	s = strings.Clone(s)
 	m[s] = s
 	return s
+}
+
+// newFlexStopTime returns a copy of flex on the heap, or nil when it sets no
+// field. Copying into new storage, rather than returning &flex, keeps rows
+// without Flex columns from allocating.
+func newFlexStopTime(flex FlexStopTime) *FlexStopTime {
+	if flex == (FlexStopTime{}) {
+		return nil
+	}
+	heapCopy := new(FlexStopTime)
+	*heapCopy = flex
+	return heapCopy
 }
 
 func parseGtfsTimeToDuration(s string) (time.Duration, bool) {
