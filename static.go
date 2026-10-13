@@ -1351,10 +1351,12 @@ type stopVisit struct {
 }
 
 // parseTripStops is the StopTimesStopsOnly counterpart of
-// parseScheduledStopTimes: it applies the same row filtering and ordering but
-// keeps only each trip's sequence of stops.
+// parseScheduledStopTimes: it keeps only each trip's sequence of stops, so
+// rows without a known stop (including every GTFS-Flex location or location
+// group row) are dropped. stop_id is optional because a feed with only Flex
+// service may leave it out.
 func parseTripStops(csv *csv.File, stops []Stop, trips []ScheduledTrip) {
-	stopIDColumn := csv.RequiredColumn("stop_id")
+	stopIDColumn := csv.OptionalColumn("stop_id")
 	stopSequenceColumn := csv.RequiredColumn("stop_sequence")
 	tripIDColumn := csv.RequiredColumn("trip_id")
 	if err := csv.MissingRequiredColumns(); err != nil {
