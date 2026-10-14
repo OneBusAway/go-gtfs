@@ -199,7 +199,9 @@ type Alert struct {
 	URL              []AlertText
 	// IsDeleted is set when the feed entity carrying this alert has
 	// is_deleted = true, so consumers can drop an alert they kept from an
-	// earlier feed.
+	// earlier feed. A deleted entity without an alert payload is skipped
+	// like any other entity without a payload: nothing in it says it was
+	// an alert, and the GTFS-realtime spec requires the payload.
 	IsDeleted bool
 }
 

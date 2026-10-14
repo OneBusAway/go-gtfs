@@ -1071,6 +1071,10 @@ func TestRealtimeAlertIsDeleted(t *testing.T) {
 			IsDeleted: ptr(false),
 			Alert:     buildBaseRtAlert(),
 		},
+		{
+			Id:        ptr("deleted-without-payload"),
+			IsDeleted: ptr(true),
+		},
 	}
 	header := &gtfsrt.FeedHeader{
 		GtfsRealtimeVersion: ptr("2.0"),
@@ -1078,6 +1082,7 @@ func TestRealtimeAlertIsDeleted(t *testing.T) {
 	}
 	got := testutil.MustParse(t, header, in, &gtfs.ParseRealtimeOptions{})
 
+	// The payload-less deletion is skipped: its type is unknown.
 	want := map[string]bool{"active": false, "deleted": true, "explicitly-not-deleted": false}
 	if len(got.Alerts) != len(want) {
 		t.Fatalf("got %d alerts, want %d", len(got.Alerts), len(want))
