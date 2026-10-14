@@ -1054,3 +1054,37 @@ func TestRealtimeTripUpdateTimestampAndEntityIndex(t *testing.T) {
 			tripID3, trip.IsEntityInMessage, trip.EntityIndex)
 	}
 }
+
+func TestRealtimeAlertIsDeleted(t *testing.T) {
+	in := []*gtfsrt.FeedEntity{
+		{
+			Id:    ptr("active"),
+			Alert: buildBaseRtAlert(),
+		},
+		{
+			Id:        ptr("deleted"),
+			IsDeleted: ptr(true),
+			Alert:     buildBaseRtAlert(),
+		},
+		{
+			Id:        ptr("explicitly-not-deleted"),
+			IsDeleted: ptr(false),
+			Alert:     buildBaseRtAlert(),
+		},
+	}
+	header := &gtfsrt.FeedHeader{
+		GtfsRealtimeVersion: ptr("2.0"),
+		Timestamp:           ptr(uint64(createTime.Unix())),
+	}
+	got := testutil.MustParse(t, header, in, &gtfs.ParseRealtimeOptions{})
+
+	want := map[string]bool{"active": false, "deleted": true, "explicitly-not-deleted": false}
+	if len(got.Alerts) != len(want) {
+		t.Fatalf("got %d alerts, want %d", len(got.Alerts), len(want))
+	}
+	for _, alert := range got.Alerts {
+		if alert.IsDeleted != want[alert.ID] {
+			t.Errorf("alert %s IsDeleted = %v, want %v", alert.ID, alert.IsDeleted, want[alert.ID])
+		}
+	}
+}
