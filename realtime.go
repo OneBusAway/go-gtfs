@@ -197,6 +197,12 @@ type Alert struct {
 	Header           []AlertText
 	Description      []AlertText
 	URL              []AlertText
+	// IsDeleted is set when the feed entity carrying this alert has
+	// is_deleted = true, so consumers can drop an alert they kept from an
+	// earlier feed. A deleted entity without an alert payload is skipped
+	// like any other entity without a payload: nothing in it says it was
+	// an alert, and the GTFS-realtime spec requires the payload.
+	IsDeleted bool
 }
 
 type AlertCause = gtfsrt.Alert_Cause
@@ -322,6 +328,7 @@ func ParseRealtime(content []byte, opts *ParseRealtimeOptions) (*Realtime, error
 			ok = true
 		} else if entityAlert := entity.Alert; entityAlert != nil {
 			alert, alertTrips = parseAlert(entity.GetId(), entityAlert, opts)
+			alert.IsDeleted = entity.GetIsDeleted()
 			ok = true
 		} else {
 			continue
