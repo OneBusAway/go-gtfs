@@ -812,72 +812,116 @@ func parseScheduledTrips(csv *csv.File, routes []Route, services []Service, shap
 }
 
 func parseScheduledStopTimes(csv *csv.File, stops []Stop, trips []ScheduledTrip) {
-	stopIDColumn := csv.RequiredColumn("stop_id")
-	stopSequenceKey := csv.RequiredColumn("stop_sequence")
-	tripIDColumn := csv.RequiredColumn("trip_id")
-	arrivalTimeColumn := csv.OptionalColumn("arrival_time")
-	departureTimeColumn := csv.OptionalColumn("departure_time")
-	stopHeadsignColumn := csv.OptionalColumn("stop_headsign")
-	pickupTypeColumn := csv.OptionalColumn("pickup_type")
-	dropOffTypeColumn := csv.OptionalColumn("drop_off_type")
-	continuousPickupColumn := csv.OptionalColumn("continuous_pickup")
-	continuousDropOffColumn := csv.OptionalColumn("continuous_drop_off")
-	shapeDistanceTraveledColumn := csv.OptionalColumn("shape_dist_traveled")
-	timepointColumn := csv.OptionalColumn("timepoint")
-	if err := csv.MissingRequiredColumns(); err != nil {
-		fmt.Println(err)
+	reader, missing := newStopTimeReader(csv, stops)
+	if missing != nil {
+		fmt.Println(missing)
 		return
 	}
-
-	idToStop := stopsByID(stops)
-	headsigns := stringInterner{}
-	var hasNonEmptyShapeDistRow = false
-	stopTimesByTrip := readTripRows(csv, tripIDColumn, trips, func() (ScheduledStopTime, bool) {
-		arrival, arrivalOk := parseGtfsTimeToDuration(arrivalTimeColumn.Read())
-		departure, departureOk := parseGtfsTimeToDuration(departureTimeColumn.Read())
-
-		if !departureOk {
-			arrival = departure
-		}
-		if !arrivalOk {
-			departure = arrival
-		}
-		if len(shapeDistanceTraveledColumn.Read()) > 0 {
-			hasNonEmptyShapeDistRow = true
-		}
-		stopSequence, err := strconv.Atoi(stopSequenceKey.Read())
-		if err != nil {
-			// TODO: log a warning
-			return ScheduledStopTime{}, false
-		}
-		stopTime := ScheduledStopTime{
-			Stop:                  idToStop[stopIDColumn.Read()],
-			Headsign:              headsigns.intern(stopHeadsignColumn.Read()),
-			ArrivalTime:           arrival,
-			StopSequence:          stopSequence,
-			DepartureTime:         departure,
-			PickupType:            parsePickupDropOffPolicyOrYes(pickupTypeColumn.Read()),
-			DropOffType:           parsePickupDropOffPolicyOrYes(dropOffTypeColumn.Read()),
-			ContinuousPickup:      parsePickupDropOffPolicy(continuousPickupColumn.ReadOr("")),
-			ContinuousDropOff:     parsePickupDropOffPolicy(continuousDropOffColumn.ReadOr("")),
-			ShapeDistanceTraveled: parseFloat64(shapeDistanceTraveledColumn.Read()),
-			ExactTimes:            timepointColumn.ReadOr("1") != "0",
-		}
-		return stopTime, stopTime.Stop != nil
-	})
+	stopTimesByTrip := readTripRows(csv, reader.tripIDColumn, trips, reader.read)
 	for i, stopTimes := range stopTimesByTrip {
 		if len(stopTimes) == 0 {
 			continue
 		}
-		sort.Slice(stopTimes, func(a, b int) bool {
-			return stopTimes[a].StopSequence < stopTimes[b].StopSequence
-		})
-		if hasNonEmptyShapeDistRow {
-			trips[i].StopTimes = interpolateStopTimesByShapeDist(stopTimes)
-		} else {
-			trips[i].StopTimes = interpolateStopTimes(stopTimes)
-		}
+		trips[i].StopTimes = finishTripStopTimes(stopTimes, reader.hasShapeDistances)
 	}
+}
+
+// stopTimeReader builds a ScheduledStopTime from each row of stop_times.txt.
+type stopTimeReader struct {
+	stopIDColumn                csv.RequiredColumn
+	stopSequenceColumn          csv.RequiredColumn
+	tripIDColumn                csv.RequiredColumn
+	arrivalTimeColumn           csv.OptionalColumn
+	departureTimeColumn         csv.OptionalColumn
+	stopHeadsignColumn          csv.OptionalColumn
+	pickupTypeColumn            csv.OptionalColumn
+	dropOffTypeColumn           csv.OptionalColumn
+	continuousPickupColumn      csv.OptionalColumn
+	continuousDropOffColumn     csv.OptionalColumn
+	shapeDistanceTraveledColumn csv.OptionalColumn
+	timepointColumn             csv.OptionalColumn
+
+	idToStop  map[string]*Stop
+	headsigns stringInterner
+
+	// hasShapeDistances is set once any row read so far has a
+	// shape_dist_traveled value. It picks how a trip's missing times are
+	// interpolated, for the whole feed.
+	hasShapeDistances bool
+}
+
+// newStopTimeReader returns nil and the names of any missing required columns.
+func newStopTimeReader(f *csv.File, stops []Stop) (*stopTimeReader, []string) {
+	reader := &stopTimeReader{
+		stopIDColumn:                f.RequiredColumn("stop_id"),
+		stopSequenceColumn:          f.RequiredColumn("stop_sequence"),
+		tripIDColumn:                f.RequiredColumn("trip_id"),
+		arrivalTimeColumn:           f.OptionalColumn("arrival_time"),
+		departureTimeColumn:         f.OptionalColumn("departure_time"),
+		stopHeadsignColumn:          f.OptionalColumn("stop_headsign"),
+		pickupTypeColumn:            f.OptionalColumn("pickup_type"),
+		dropOffTypeColumn:           f.OptionalColumn("drop_off_type"),
+		continuousPickupColumn:      f.OptionalColumn("continuous_pickup"),
+		continuousDropOffColumn:     f.OptionalColumn("continuous_drop_off"),
+		shapeDistanceTraveledColumn: f.OptionalColumn("shape_dist_traveled"),
+		timepointColumn:             f.OptionalColumn("timepoint"),
+	}
+	if missing := f.MissingRequiredColumns(); missing != nil {
+		return nil, missing
+	}
+	reader.idToStop = stopsByID(stops)
+	reader.headsigns = stringInterner{}
+	return reader, nil
+}
+
+// read builds the stop time in the current row. It reports false for a row
+// with an invalid stop sequence or an unknown stop.
+func (r *stopTimeReader) read() (ScheduledStopTime, bool) {
+	arrival, arrivalOk := parseGtfsTimeToDuration(r.arrivalTimeColumn.Read())
+	departure, departureOk := parseGtfsTimeToDuration(r.departureTimeColumn.Read())
+
+	if !departureOk {
+		arrival = departure
+	}
+	if !arrivalOk {
+		departure = arrival
+	}
+	if len(r.shapeDistanceTraveledColumn.Read()) > 0 {
+		r.hasShapeDistances = true
+	}
+	stopSequence, err := strconv.Atoi(r.stopSequenceColumn.Read())
+	if err != nil {
+		// TODO: log a warning
+		return ScheduledStopTime{}, false
+	}
+	stopTime := ScheduledStopTime{
+		Stop:                  r.idToStop[r.stopIDColumn.Read()],
+		Headsign:              r.headsigns.intern(r.stopHeadsignColumn.Read()),
+		ArrivalTime:           arrival,
+		StopSequence:          stopSequence,
+		DepartureTime:         departure,
+		PickupType:            parsePickupDropOffPolicyOrYes(r.pickupTypeColumn.Read()),
+		DropOffType:           parsePickupDropOffPolicyOrYes(r.dropOffTypeColumn.Read()),
+		ContinuousPickup:      parsePickupDropOffPolicy(r.continuousPickupColumn.ReadOr("")),
+		ContinuousDropOff:     parsePickupDropOffPolicy(r.continuousDropOffColumn.ReadOr("")),
+		ShapeDistanceTraveled: parseFloat64(r.shapeDistanceTraveledColumn.Read()),
+		ExactTimes:            r.timepointColumn.ReadOr("1") != "0",
+	}
+	return stopTime, stopTime.Stop != nil
+}
+
+// finishTripStopTimes orders one trip's stop times by stop_sequence and fills
+// in missing times. hasShapeDistances must be stopTimeReader's value after it
+// has read every row of the file, because it decides how times are
+// interpolated for the whole feed.
+func finishTripStopTimes(stopTimes []ScheduledStopTime, hasShapeDistances bool) []ScheduledStopTime {
+	sort.Slice(stopTimes, func(a, b int) bool {
+		return stopTimes[a].StopSequence < stopTimes[b].StopSequence
+	})
+	if hasShapeDistances {
+		return interpolateStopTimesByShapeDist(stopTimes)
+	}
+	return interpolateStopTimes(stopTimes)
 }
 
 type stopVisit struct {
@@ -930,25 +974,18 @@ func stopsByID(stops []Stop) map[string]*Stop {
 	return idToStop
 }
 
-// readTripRows reads every row of a stop_times-shaped file and groups the
-// values readRow builds by trip, indexed like trips. Rows for which readRow
-// returns false, rows with missing required values, and rows for unknown
-// trips are dropped.
+// readTripRows groups the rows eachTripRow accepts by trip, indexed like
+// trips.
 //
-// Each trip's rows are buffered while they are contiguous in the file and
-// then copied into a slice of exactly that size, so the result carries no
-// slack capacity. A trip whose rows resume after another trip's grows by
-// append instead, and is trimmed to size once the file is read.
+// Each trip's rows are buffered while they are contiguous among the accepted
+// rows and then copied into a slice of exactly that size, so the result
+// carries no slack capacity. A trip whose rows resume after another trip's
+// grows by append instead, and is trimmed to size once the file is read.
 func readTripRows[T any](f *csv.File, tripIDColumn csv.RequiredColumn, trips []ScheduledTrip, readRow func() (T, bool)) [][]T {
-	idToTripIndex := make(map[string]int, len(trips))
-	for i := range trips {
-		idToTripIndex[trips[i].ID] = i
-	}
 	rowsByTrip := make([][]T, len(trips))
 	resumed := map[int]bool{}
 	var pending []T
 	currentTrip := -1
-	var currentTripID string
 	flush := func() {
 		if currentTrip < 0 || len(pending) == 0 {
 			return
@@ -962,34 +999,56 @@ func readTripRows[T any](f *csv.File, tripIDColumn csv.RequiredColumn, trips []S
 		}
 		pending = pending[:0]
 	}
-	for f.NextRow() {
-		row, ok := readRow()
-		if !ok {
-			continue
-		}
-		// currentTripID starts out empty, which is safe: a row with an empty
-		// trip ID is dropped below for missing a required value.
-		if tripID := tripIDColumn.Read(); tripID != currentTripID {
+	eachTripRow(f, tripIDColumn, tripIndexByID(trips), readRow, func(tripIndex int, row T) {
+		if tripIndex != currentTrip {
 			flush()
-			currentTrip = -1
-			if i, ok := idToTripIndex[tripID]; ok {
-				currentTrip = i
-			}
-			currentTripID = tripID
+			currentTrip = tripIndex
 		}
-		if missingKeys := f.MissingRowKeys(); len(missingKeys) > 0 {
-			log.Printf("Skipping stop time because of missing keys %s", missingKeys)
-			continue
-		}
-		if currentTrip >= 0 {
-			pending = append(pending, row)
-		}
-	}
+		pending = append(pending, row)
+	})
 	flush()
 	for i := range resumed {
 		rowsByTrip[i] = append([]T(nil), rowsByTrip[i]...)
 	}
 	return rowsByTrip
+}
+
+// eachTripRow reads every row of a stop_times-shaped file and passes the trip
+// index and the value readRow builds to accept, in file order. Rows for which
+// readRow returns false, rows with missing required values, and rows for
+// unknown trips are dropped.
+func eachTripRow[T any](f *csv.File, tripIDColumn csv.RequiredColumn, idToTripIndex map[string]int, readRow func() (T, bool), accept func(tripIndex int, row T)) {
+	// Rows of one trip are usually contiguous, so the trip of the previous row
+	// saves a map lookup on most rows.
+	var tripID string
+	tripIndex, known := 0, false
+	for f.NextRow() {
+		row, ok := readRow()
+		if !ok {
+			continue
+		}
+		if id := tripIDColumn.Read(); id != tripID {
+			tripID = id
+			tripIndex, known = idToTripIndex[id]
+		}
+		if missingKeys := f.MissingRowKeys(); len(missingKeys) > 0 {
+			log.Printf("Skipping stop time because of missing keys %s", missingKeys)
+			continue
+		}
+		if known {
+			accept(tripIndex, row)
+		}
+	}
+}
+
+// tripIndexByID maps each trip ID to its index in trips. When an ID repeats,
+// the last trip with it wins.
+func tripIndexByID(trips []ScheduledTrip) map[string]int {
+	idToTripIndex := make(map[string]int, len(trips))
+	for i := range trips {
+		idToTripIndex[trips[i].ID] = i
+	}
+	return idToTripIndex
 }
 
 // stringInterner deduplicates strings read from CSV rows. Beyond saving
@@ -1043,58 +1102,20 @@ type ShapeRow struct {
 }
 
 func parseShapes(csv *csv.File) []Shape {
-	shapeIDColumn := csv.RequiredColumn("shape_id")
-	shapePtLatColumn := csv.RequiredColumn("shape_pt_lat")
-	shapePtLonColumn := csv.RequiredColumn("shape_pt_lon")
-	shapePtSequenceColumn := csv.RequiredColumn("shape_pt_sequence")
-	shapeDistTraveled := csv.OptionalColumn("shape_dist_traveled")
-
-	if err := csv.MissingRequiredColumns(); err != nil {
-		fmt.Println(err)
+	reader, missing := newShapeReader(csv)
+	if missing != nil {
+		fmt.Println(missing)
 		return nil
 	}
 
 	shapeIDToRowData := map[string][]ShapeRow{}
-	for csv.NextRow() {
-		shapeID := shapeIDColumn.Read()
-		shapePtLat := parseFloat64(shapePtLatColumn.Read())
-		shapePtLon := parseFloat64(shapePtLonColumn.Read())
-		shapePtSequence := parseInt32(shapePtSequenceColumn.Read())
-		shapeDistTraveled := parseFloat64(shapeDistTraveled.Read())
-
-		if missingKeys := csv.MissingRowKeys(); len(missingKeys) > 0 {
-			log.Printf("Skipping shape because of missing keys %s", missingKeys)
-			continue
-		}
-
-		shapeIDToRowData[shapeID] = append(shapeIDToRowData[shapeID], ShapeRow{
-			ShapePtLat:        *shapePtLat,
-			ShapePtLon:        *shapePtLon,
-			ShapePtSequence:   *shapePtSequence,
-			ShapeDistTraveled: shapeDistTraveled,
-		})
-	}
+	reader.eachRow(func(shapeID string, row ShapeRow) {
+		shapeIDToRowData[shapeID] = append(shapeIDToRowData[shapeID], row)
+	})
 
 	shapes := make([]Shape, 0, len(shapeIDToRowData))
 	for shapeID, rows := range shapeIDToRowData {
-		// Sort the rows by sequence number
-		sort.Slice(rows, func(i, j int) bool {
-			return rows[i].ShapePtSequence < rows[j].ShapePtSequence
-		})
-
-		points := make([]ShapePoint, 0, len(rows))
-		for _, row := range rows {
-			points = append(points, ShapePoint{
-				Latitude:  row.ShapePtLat,
-				Longitude: row.ShapePtLon,
-				Distance:  row.ShapeDistTraveled,
-			})
-		}
-
-		shapes = append(shapes, Shape{
-			ID:     shapeID,
-			Points: points,
-		})
+		shapes = append(shapes, finishShape(shapeID, rows))
 	}
 
 	// Sort the shapes by ID
@@ -1103,6 +1124,74 @@ func parseShapes(csv *csv.File) []Shape {
 	})
 
 	return shapes
+}
+
+// shapeReader reads the rows of shapes.txt.
+type shapeReader struct {
+	file                    *csv.File
+	shapeIDColumn           csv.RequiredColumn
+	shapePtLatColumn        csv.RequiredColumn
+	shapePtLonColumn        csv.RequiredColumn
+	shapePtSequenceColumn   csv.RequiredColumn
+	shapeDistTraveledColumn csv.OptionalColumn
+}
+
+// newShapeReader returns nil and the names of any missing required columns.
+func newShapeReader(f *csv.File) (*shapeReader, []string) {
+	reader := &shapeReader{
+		file:                    f,
+		shapeIDColumn:           f.RequiredColumn("shape_id"),
+		shapePtLatColumn:        f.RequiredColumn("shape_pt_lat"),
+		shapePtLonColumn:        f.RequiredColumn("shape_pt_lon"),
+		shapePtSequenceColumn:   f.RequiredColumn("shape_pt_sequence"),
+		shapeDistTraveledColumn: f.OptionalColumn("shape_dist_traveled"),
+	}
+	if missing := f.MissingRequiredColumns(); missing != nil {
+		return nil, missing
+	}
+	return reader, nil
+}
+
+// eachRow passes each row that has its required values to accept, in file
+// order.
+func (r *shapeReader) eachRow(accept func(shapeID string, row ShapeRow)) {
+	for r.file.NextRow() {
+		shapeID := r.shapeIDColumn.Read()
+		shapePtLat := parseFloat64(r.shapePtLatColumn.Read())
+		shapePtLon := parseFloat64(r.shapePtLonColumn.Read())
+		shapePtSequence := parseInt32(r.shapePtSequenceColumn.Read())
+		shapeDistTraveled := parseFloat64(r.shapeDistTraveledColumn.Read())
+
+		if missingKeys := r.file.MissingRowKeys(); len(missingKeys) > 0 {
+			log.Printf("Skipping shape because of missing keys %s", missingKeys)
+			continue
+		}
+
+		accept(shapeID, ShapeRow{
+			ShapePtLat:        *shapePtLat,
+			ShapePtLon:        *shapePtLon,
+			ShapePtSequence:   *shapePtSequence,
+			ShapeDistTraveled: shapeDistTraveled,
+		})
+	}
+}
+
+// finishShape orders one shape's rows by shape_pt_sequence and builds the
+// shape.
+func finishShape(shapeID string, rows []ShapeRow) Shape {
+	sort.Slice(rows, func(i, j int) bool {
+		return rows[i].ShapePtSequence < rows[j].ShapePtSequence
+	})
+
+	points := make([]ShapePoint, 0, len(rows))
+	for _, row := range rows {
+		points = append(points, ShapePoint{
+			Latitude:  row.ShapePtLat,
+			Longitude: row.ShapePtLon,
+			Distance:  row.ShapeDistTraveled,
+		})
+	}
+	return Shape{ID: shapeID, Points: points}
 }
 
 func parseFrequencies(csv *csv.File, tripIDToScheduledTrip map[string]*ScheduledTrip) {
