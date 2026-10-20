@@ -203,11 +203,22 @@ func ParseStatic(content []byte, opts ParseStaticOptions) (*Static, error) {
 	if err != nil {
 		return nil, err
 	}
-	result := &Static{}
+	return parseStatic(staticZipFiles(reader), opts, nil)
+}
+
+// staticZipFiles indexes the files of a GTFS zip by name.
+func staticZipFiles(reader *zip.Reader) map[constants.StaticFile]*zip.File {
 	fileNameToFile := map[constants.StaticFile]*zip.File{}
 	for _, file := range reader.File {
 		fileNameToFile[constants.StaticFile(file.Name)] = file
 	}
+	return fileNameToFile
+}
+
+// parseStatic parses the feed's files. When stream is non-nil, it only counts
+// the rows of shapes.txt and stop_times.txt, for stream to read later.
+func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseStaticOptions, stream *StaticStream) (*Static, error) {
+	result := &Static{}
 	serviceIdToService := map[string]Service{}
 	// With SkipShapes the map stays nil, which tells parseScheduledTrips not
 	// to look up (and warn about) shape IDs that were never loaded.
@@ -276,6 +287,13 @@ func ParseStatic(content []byte, opts ParseStaticOptions) (*Static, error) {
 		{
 			File: "shapes.txt",
 			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				if stream != nil {
+					stream.countShapeRows(file)
+					for shapeID := range stream.shapeRowCounts {
+						shapeIdToShape[shapeID] = &Shape{ID: shapeID}
+					}
+					return
+				}
 				result.Shapes = parseShapes(file)
 				for idx, shape := range result.Shapes {
 					shapeIdToShape[shape.ID] = &result.Shapes[idx]
@@ -314,6 +332,10 @@ func ParseStatic(content []byte, opts ParseStaticOptions) (*Static, error) {
 		{
 			File: "stop_times.txt",
 			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				if stream != nil {
+					stream.countStopTimeRows(file, result.Stops, result.Trips)
+					return
+				}
 				if opts.StopTimes == StopTimesStopsOnly {
 					parseTripStops(file, result.Stops, result.Trips)
 				} else {
@@ -874,6 +896,17 @@ func newStopTimeReader(f *csv.File, stops []Stop) (*stopTimeReader, []string) {
 	return reader, nil
 }
 
+// newStopTimeReaderForStops is newStopTimeReader with the stop lookup already
+// built.
+func newStopTimeReaderForStops(f *csv.File, idToStop map[string]*Stop) (*stopTimeReader, []string) {
+	reader, missing := newStopTimeReader(f, nil)
+	if missing != nil {
+		return nil, missing
+	}
+	reader.idToStop = idToStop
+	return reader, nil
+}
+
 // read builds the stop time in the current row. It reports false for a row
 // with an invalid stop sequence or an unknown stop.
 func (r *stopTimeReader) read() (ScheduledStopTime, bool) {
@@ -999,12 +1032,13 @@ func readTripRows[T any](f *csv.File, tripIDColumn csv.RequiredColumn, trips []S
 		}
 		pending = pending[:0]
 	}
-	eachTripRow(f, tripIDColumn, tripIndexByID(trips), readRow, func(tripIndex int, row T) {
+	eachTripRow(f, tripIDColumn, tripIndexByID(trips), readRow, func(tripIndex int, row T) bool {
 		if tripIndex != currentTrip {
 			flush()
 			currentTrip = tripIndex
 		}
 		pending = append(pending, row)
+		return true
 	})
 	flush()
 	for i := range resumed {
@@ -1014,10 +1048,10 @@ func readTripRows[T any](f *csv.File, tripIDColumn csv.RequiredColumn, trips []S
 }
 
 // eachTripRow reads every row of a stop_times-shaped file and passes the trip
-// index and the value readRow builds to accept, in file order. Rows for which
-// readRow returns false, rows with missing required values, and rows for
-// unknown trips are dropped.
-func eachTripRow[T any](f *csv.File, tripIDColumn csv.RequiredColumn, idToTripIndex map[string]int, readRow func() (T, bool), accept func(tripIndex int, row T)) {
+// index and the value readRow builds to accept, in file order, until accept
+// returns false. Rows for which readRow returns false, rows with missing
+// required values, and rows for unknown trips are dropped.
+func eachTripRow[T any](f *csv.File, tripIDColumn csv.RequiredColumn, idToTripIndex map[string]int, readRow func() (T, bool), accept func(tripIndex int, row T) bool) {
 	// Rows of one trip are usually contiguous, so the trip of the previous row
 	// saves a map lookup on most rows.
 	var tripID string
@@ -1035,8 +1069,8 @@ func eachTripRow[T any](f *csv.File, tripIDColumn csv.RequiredColumn, idToTripIn
 			log.Printf("Skipping stop time because of missing keys %s", missingKeys)
 			continue
 		}
-		if known {
-			accept(tripIndex, row)
+		if known && !accept(tripIndex, row) {
+			return
 		}
 	}
 }
@@ -1109,8 +1143,9 @@ func parseShapes(csv *csv.File) []Shape {
 	}
 
 	shapeIDToRowData := map[string][]ShapeRow{}
-	reader.eachRow(func(shapeID string, row ShapeRow) {
+	reader.eachRow(func(shapeID string, row ShapeRow) bool {
 		shapeIDToRowData[shapeID] = append(shapeIDToRowData[shapeID], row)
+		return true
 	})
 
 	shapes := make([]Shape, 0, len(shapeIDToRowData))
@@ -1153,8 +1188,8 @@ func newShapeReader(f *csv.File) (*shapeReader, []string) {
 }
 
 // eachRow passes each row that has its required values to accept, in file
-// order.
-func (r *shapeReader) eachRow(accept func(shapeID string, row ShapeRow)) {
+// order, until accept returns false.
+func (r *shapeReader) eachRow(accept func(shapeID string, row ShapeRow) bool) {
 	for r.file.NextRow() {
 		shapeID := r.shapeIDColumn.Read()
 		shapePtLat := parseFloat64(r.shapePtLatColumn.Read())
@@ -1167,12 +1202,15 @@ func (r *shapeReader) eachRow(accept func(shapeID string, row ShapeRow)) {
 			continue
 		}
 
-		accept(shapeID, ShapeRow{
+		row := ShapeRow{
 			ShapePtLat:        *shapePtLat,
 			ShapePtLon:        *shapePtLon,
 			ShapePtSequence:   *shapePtSequence,
 			ShapeDistTraveled: shapeDistTraveled,
-		})
+		}
+		if !accept(shapeID, row) {
+			return
+		}
 	}
 }
 
