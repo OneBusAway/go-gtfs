@@ -879,10 +879,13 @@ const (
 	StopType_EntranceOrExit StopType = 2
 	StopType_GenericNode    StopType = 3
 	StopType_BoardingArea   StopType = 4
-	StopType_Platform       StopType = 5
+	// Deprecated: 5 is not a GTFS location_type, and the parser no longer
+	// returns it. A stop with a parent station is a StopType_Stop; check
+	// Stop.Parent to tell a platform from a standalone stop.
+	StopType_Platform StopType = 5
 )
 
-func parseStopType(s string, hasParentStop bool) StopType {
+func parseStopType(s string) StopType {
 	switch s {
 	case "1":
 		return StopType_Station
@@ -893,11 +896,7 @@ func parseStopType(s string, hasParentStop bool) StopType {
 	case "4":
 		return StopType_BoardingArea
 	default:
-		if hasParentStop {
-			return StopType_Platform
-		} else {
-			return StopType_Stop
-		}
+		return StopType_Stop
 	}
 }
 
