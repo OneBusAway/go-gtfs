@@ -196,6 +196,11 @@ func TestParseFareProducts(t *testing.T) {
 			wantWarnings: []warnings.StaticWarningKind{warnings.FareProductInvalid{FareProductID: "Bus", Reason: "missing values [amount currency]"}},
 		},
 		{
+			desc:         "blank currency",
+			products:     []string{header, "Bus,,,,1, "},
+			wantWarnings: []warnings.StaticWarningKind{warnings.FareProductInvalid{FareProductID: "Bus", Reason: "missing values [currency]"}},
+		},
+		{
 			desc:         "duplicate key",
 			products:     []string{header, "Bus,,Adult,cash,3,USD", "Bus,,Adult,cash,4,USD"},
 			want:         []string{`Bus "" category=Adult media=cash 3 USD`},

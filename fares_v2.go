@@ -192,8 +192,10 @@ func parseFareProducts(csv *csv.File, categories []RiderCategory, media []FareMe
 		missing := csv.MissingRowKeys()
 		reason := ""
 		switch {
-		case len(missing) > 0 || currency == "":
+		case len(missing) > 0:
 			reason = fmt.Sprintf("missing values %s", missing)
+		case currency == "":
+			reason = "missing values [currency]"
 		case !ok:
 			reason = fmt.Sprintf("invalid amount %q", rawAmount)
 		case categoryID != "" && p.RiderCategory == nil:
