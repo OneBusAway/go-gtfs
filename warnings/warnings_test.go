@@ -35,6 +35,8 @@ func TestFlexWarningKindsHaveMessages(t *testing.T) {
 		{StopAccessInvalid{StopID: "s", Value: "2", Reason: "r"}, `stop "s" stop_access "2" is ignored: r`},
 		{PathwayInvalid{PathwayID: "p", Reason: "r"}, `pathway "p" is invalid: r`},
 		{TranslationInvalid{Reason: "r"}, "translation is invalid: r"},
+		{AttributionInvalid{AttributionID: "a", Reason: "r"}, `attribution "a" is invalid: r`},
+		{AttributionWithoutRole{AttributionID: "a"}, `attribution "a" has no role; set is_producer, is_operator or is_authority`},
 		{TranslationsWithoutFeedInfo{}, "translations.txt is present but feed_info.txt is missing or unusable"},
 		{PathwayInvalidValue{PathwayID: "p", Column: "length", Value: "-1"}, `pathway "p" has invalid length "-1"; read as unset`},
 		{FeedInfoExtraRow{}, "feed_info.txt has more than one row; only the first is read"},

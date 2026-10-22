@@ -40,6 +40,8 @@ type Static struct {
 	// Translations is nil when translations.txt is absent. Use NewTranslator
 	// to look them up.
 	Translations []Translation
+	// Attributions with no Agency, Route or Trip apply to the whole feed.
+	Attributions []Attribution
 
 	// FeedInfo is nil when the feed has no feed_info.txt, or when that file
 	// lacks a required column or has no data row that can be read.
@@ -558,6 +560,16 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 			Optional: true,
 		},
 		{
+			File: constants.AttributionsFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				result.Attributions, w = parseAttributions(file, result.Agencies, routeIdToRoute, tripIdToScheduledTrip)
+				return
+			},
+			Optional: true,
+			// Each row stands alone, so rows read before the error are kept.
+			Discard: func() {},
+		},
+		{
 			File: "frequencies.txt",
 			Action: func(file *csv.File) (w []warnings.StaticWarning) {
 				parseFrequencies(file, tripIdToScheduledTrip)
@@ -746,19 +758,14 @@ func parseRoutes(csv *csv.File, agencies []Agency) []Route {
 		return nil
 	}
 
+	agencyIdToAgency := agenciesByID(agencies)
 	var routes []Route
 	for csv.NextRow() {
 		routeID := idColumn.Read()
 		agencyID := agencyIDColumn.Read()
 		var agency *Agency
 		if agencyID != "" {
-			for i := range agencies {
-				if agencies[i].Id == agencyID {
-					agency = &agencies[i]
-					break
-				}
-			}
-			if agency == nil {
+			if agency = agencyIdToAgency[agencyID]; agency == nil {
 				log.Printf("skipping route %s: no match for agency ID %s", routeID, agencyID)
 				continue
 			}
@@ -1690,6 +1697,18 @@ func parseTripStops(csv *csv.File, stopIdToStop map[string]*Stop, trips []Schedu
 		trips[i].Stops = tripStops
 		visitsByTrip[i] = nil
 	}
+}
+
+// agenciesByID maps each agency ID to its first agency, so a repeated
+// agency_id resolves the same way for every file that references it.
+func agenciesByID(agencies []Agency) map[string]*Agency {
+	idToAgency := make(map[string]*Agency, len(agencies))
+	for i := range agencies {
+		if _, ok := idToAgency[agencies[i].Id]; !ok {
+			idToAgency[agencies[i].Id] = &agencies[i]
+		}
+	}
+	return idToAgency
 }
 
 func levelsByID(levels []Level) map[string]*Level {
