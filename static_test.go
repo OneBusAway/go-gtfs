@@ -376,6 +376,13 @@ func TestParse(t *testing.T) {
 			).build(),
 			expected: &Static{
 				Stops: []Stop{{Id: "a"}},
+				Transfers: []Transfer{
+					{
+						From: &Stop{Id: "a"},
+						To:   &Stop{Id: "a"},
+						Type: TransferType_Recommended,
+					},
+				},
 			},
 		},
 		{
@@ -389,6 +396,15 @@ func TestParse(t *testing.T) {
 			).build(),
 			expected: &Static{
 				Stops: []Stop{{Id: "a"}},
+				Warnings: []warnings.StaticWarning{
+					{
+						Kind:          warnings.TransferUnknownReference{Column: "to_stop_id", ID: "b"},
+						File:          constants.TransfersFile,
+						RowNumber:     1,
+						RowContent:    []string{"a", "b"},
+						HeaderContent: []string{"from_stop_id", "to_stop_id"},
+					},
+				},
 			},
 		},
 		{
@@ -402,6 +418,15 @@ func TestParse(t *testing.T) {
 			).build(),
 			expected: &Static{
 				Stops: []Stop{{Id: "b"}},
+				Warnings: []warnings.StaticWarning{
+					{
+						Kind:          warnings.TransferUnknownReference{Column: "from_stop_id", ID: "a"},
+						File:          constants.TransfersFile,
+						RowNumber:     1,
+						RowContent:    []string{"a", "b"},
+						HeaderContent: []string{"from_stop_id", "to_stop_id"},
+					},
+				},
 			},
 		},
 		{
@@ -1976,6 +2001,28 @@ func TestParse(t *testing.T) {
 			}
 		})
 	}
+}
+
+// stopID, routeID and tripID return the ID of a possibly nil reference.
+func stopID(s *Stop) string {
+	if s == nil {
+		return ""
+	}
+	return s.Id
+}
+
+func routeID(r *Route) string {
+	if r == nil {
+		return ""
+	}
+	return r.Id
+}
+
+func tripID(t *ScheduledTrip) string {
+	if t == nil {
+		return ""
+	}
+	return t.ID
 }
 
 type zipBuilder struct {

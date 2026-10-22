@@ -121,6 +121,27 @@ earlier versions should note:
   `LocationsFileInvalid` warning; a single unusable Feature is skipped with a
   `LocationInvalidGeometry` warning. Neither stops the rest of the feed from parsing.
 
+## transfers.txt and upgrading
+
+- `transfer_type` values `4` and `5` (linked trips) now parse as `TransferType_InSeat` and
+  `TransferType_InSeatNotAllowed`. Earlier versions read them as `TransferType_Recommended`.
+- For linked trips, `from_stop_id` and `to_stop_id` are optional, so `Transfer.From` and
+  `Transfer.To` may be nil. Check them before use.
+- A linked-trip row without a known `from_trip_id` and `to_trip_id` is skipped with a
+  `TransferMissingTrip` or `TransferUnknownReference` warning.
+- A row whose `from_stop_id` or `to_stop_id` is not a stop or station (`location_type` 0 or 1),
+  such as an entrance, is skipped with a `TransferStopNotAllowed` warning. For linked trips,
+  only a stop (`location_type` 0) is allowed.
+- A row that sets both a trip and a route on the same side (`from_` or `to_`) is skipped with a
+  `TransferTripNotOnRoute` warning when the trip runs on a different route.
+- A row whose `from_stop_id` equals its `to_stop_id` is kept. Earlier versions dropped it.
+- A row whose `from_route_id`, `to_route_id`, `from_trip_id` or `to_trip_id` is not empty
+  and not defined in `routes.txt` or `trips.txt` is skipped with a `TransferUnknownReference`
+  warning. Earlier versions kept the row with a nil route or trip, which made the rule apply
+  to every route or trip at the stop.
+- A row whose `from_stop_id` or `to_stop_id` is not defined in `stops.txt` is skipped with a
+  `TransferUnknownReference` warning. Earlier versions skipped it with only a log line.
+
 ## Performance
 
 The package is designed to be about as fast as possible without resorting to unreadable code.

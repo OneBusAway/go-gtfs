@@ -9,4 +9,5 @@ const (
 	LocationGroupsFile     StaticFile = "location_groups.txt"
 	LocationGroupStopsFile StaticFile = "location_group_stops.txt"
 	LocationsGeoJSONFile   StaticFile = "locations.geojson"
+	TransfersFile          StaticFile = "transfers.txt"
 )

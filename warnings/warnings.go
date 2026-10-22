@@ -145,3 +145,56 @@ type BookingRuleInvalid struct {
 func (w BookingRuleInvalid) Error() string {
 	return fmt.Sprintf("booking rule %q is invalid: %s", w.BookingRuleID, w.Reason)
 }
+
+// TransferMissingTrip is raised when a transfers.txt row links trips
+// (transfer_type 4 or 5) but leaves from_trip_id or to_trip_id empty. GTFS
+// requires both for linked trips. The row is skipped.
+type TransferMissingTrip struct {
+	Column string
+}
+
+func (w TransferMissingTrip) Error() string {
+	return fmt.Sprintf("linked-trip transfer is missing %s", w.Column)
+}
+
+// TransferUnknownReference is raised when a transfers.txt row names a stop,
+// route or trip that is not in the parsed feed: either stops.txt, routes.txt
+// or trips.txt does not define it, or its row there was skipped. The
+// transfer row is skipped too. Reading an unknown route or trip ID as unset
+// would make the rule apply more widely than the feed says.
+type TransferUnknownReference struct {
+	Column string
+	ID     string
+}
+
+func (w TransferUnknownReference) Error() string {
+	return fmt.Sprintf("transfer references unknown %s %q", w.Column, w.ID)
+}
+
+// TransferStopNotAllowed is raised when a transfers.txt row names a
+// from_stop_id or to_stop_id whose location_type the transfer does not allow.
+// GTFS allows a stop or a station (location_type 0 or 1), and only a stop for
+// linked trips (transfer_type 4 or 5). Allowed describes what the row needed.
+// The row is skipped.
+type TransferStopNotAllowed struct {
+	Column  string
+	StopID  string
+	Allowed string
+}
+
+func (w TransferStopNotAllowed) Error() string {
+	return fmt.Sprintf("transfer %s %q is not %s", w.Column, w.StopID, w.Allowed)
+}
+
+// TransferTripNotOnRoute is raised when a transfers.txt row sets a trip and a
+// route on the same side (from_ or to_) but the trip runs on a different
+// route. GTFS requires the trip to belong to the route. The row is skipped.
+type TransferTripNotOnRoute struct {
+	TripColumn string
+	TripID     string
+	RouteID    string
+}
+
+func (w TransferTripNotOnRoute) Error() string {
+	return fmt.Sprintf("transfer %s %q does not run on route %q", w.TripColumn, w.TripID, w.RouteID)
+}
