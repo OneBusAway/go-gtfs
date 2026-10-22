@@ -8,6 +8,7 @@ import (
 
 	"github.com/OneBusAway/go-gtfs/constants"
 	"github.com/OneBusAway/go-gtfs/csv"
+	"github.com/OneBusAway/go-gtfs/warnings"
 )
 
 // StaticStream is a static feed parsed without its stop times and shape
@@ -28,11 +29,11 @@ type StaticStream struct {
 
 	files map[constants.StaticFile]*zip.File
 
-	// trips, idToTripIndex and idToStop are the trips and stops as parsed,
-	// so the stream still works if the caller replaces Static's slices.
-	trips         []ScheduledTrip
-	idToTripIndex map[string]int
-	idToStop      map[string]*Stop
+	// trips and refs are the trips, and what stop times refer to, as
+	// parsed, so the stream still works if the caller replaces Static's
+	// slices.
+	trips []ScheduledTrip
+	refs  stopTimeReferences
 
 	// stopTimeCounts holds, for each trip in trips, how many stop times
 	// EachTripStopTimes yields for it.
@@ -81,20 +82,21 @@ func (s *StaticStream) StopTimeCount(tripIndex int) int {
 	return s.stopTimeCounts[tripIndex]
 }
 
-func (s *StaticStream) countStopTimeRows(file *csv.File, stops []Stop, trips []ScheduledTrip) {
-	s.stopTimeCounts = make([]int, len(trips))
-	s.idToTripIndex = tripIndexByID(trips)
-	s.idToStop = stopsByID(stops)
-	reader, missing := newStopTimeReaderForStops(file, s.idToStop)
+// countStopTimeRows counts each trip's stop times and returns the warnings
+// for the rows it drops, which EachTripStopTimes doesn't report again.
+func (s *StaticStream) countStopTimeRows(file *csv.File, static *Static) []warnings.StaticWarning {
+	s.stopTimeCounts = make([]int, len(static.Trips))
+	s.refs = newStopTimeReferences(static)
+	reader, missing := newStopTimeReader(file, s.refs)
 	if missing != nil {
-		fmt.Println(missing)
-		return
+		return missingColumnsWarning(file, missing)
 	}
-	eachTripRow(file, reader.tripIDColumn, s.idToTripIndex, reader.read, func(tripIndex int, _ ScheduledStopTime) bool {
+	eachTripRow(file, reader.tripIDColumn, s.refs.tripIndexes, reader.read, func(tripIndex int, _ ScheduledStopTime) bool {
 		s.stopTimeCounts[tripIndex]++
 		return true
 	})
 	s.hasShapeDistances = reader.hasShapeDistances
+	return reader.warnings
 }
 
 func (s *StaticStream) countShapeRows(file *csv.File) {
@@ -123,14 +125,16 @@ func (s *StaticStream) EachTripStopTimes(fn func(tripIndex int, stopTimes []Sche
 	if err != nil {
 		return err
 	}
-	reader, missing := newStopTimeReaderForStops(file, s.idToStop)
+	reader, missing := newStopTimeReader(file, s.refs)
 	if missing != nil {
 		return file.Close()
 	}
+	// countStopTimeRows already reported this file's warnings.
+	reader.discardWarnings = true
 
 	groups := newGroupBuffer[int, ScheduledStopTime](func(tripIndex int) int { return s.stopTimeCounts[tripIndex] })
 	var fnErr error
-	eachTripRow(file, reader.tripIDColumn, s.idToTripIndex, reader.read, func(tripIndex int, stopTime ScheduledStopTime) bool {
+	eachTripRow(file, reader.tripIDColumn, s.refs.tripIndexes, reader.read, func(tripIndex int, stopTime ScheduledStopTime) bool {
 		stopTimes, done := groups.add(tripIndex, stopTime)
 		if !done {
 			return true

@@ -114,6 +114,46 @@ func TestParseStaticStream_MatchesParseStatic(t *testing.T) {
 	}
 }
 
+// TestParseStaticStream_MatchesParseStaticForFlex checks that GTFS-Flex stop
+// times stream as ParseStatic parses them, and that the rows dropped for
+// breaking a GTFS-Flex rule raise the same warnings, once.
+func TestParseStaticStream_MatchesParseStaticForFlex(t *testing.T) {
+	// A deviated route: timed stops around a zone and a location group, an
+	// untimed stop to interpolate, an unknown booking rule (kept, with a
+	// warning), a zone row with no window and a row naming an unknown zone
+	// (both dropped, with warnings).
+	feed := newFlexZipBuilder().add(
+		"stop_times.txt",
+		"trip_id,stop_sequence,stop_id,location_id,location_group_id,arrival_time,departure_time,"+
+			"start_pickup_drop_off_window,end_pickup_drop_off_window,pickup_booking_rule_id",
+		"trip_id,1,stop_1,,,08:00:00,08:00:00,,,br_1",
+		"trip_id,2,,zone_a,,,,08:00:00,08:40:00,br_1",
+		"trip_id,3,stop_2,,,,,,,",
+		"trip_id,4,,,group_1,,,08:00:00,08:40:00,no_such_rule",
+		"trip_id,5,stop_1,,,08:40:00,08:40:00,,,",
+		"trip_id,6,,zone_b,,,,,,",
+		"trip_id,7,,nowhere,,,,08:00:00,08:40:00,",
+	).build()
+
+	want, err := ParseStatic(feed, ParseStaticOptions{})
+	if err != nil {
+		t.Fatalf("ParseStatic: %s", err)
+	}
+	if n := len(want.Trips[0].StopTimes); n != 5 {
+		t.Fatalf("ParseStatic kept %d stop times, want 5", n)
+	}
+	if n := len(want.Warnings); n != 3 {
+		t.Fatalf("ParseStatic raised %d warnings, want 3: %v", n, want.Warnings)
+	}
+	got := streamedStatic(t, feed, ParseStaticOptions{})
+	if diff := cmp.Diff(want.Trips, got.Trips); diff != "" {
+		t.Errorf("streamed trips differ from ParseStatic (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff(want.Warnings, got.Warnings); diff != "" {
+		t.Errorf("streamed warnings differ from ParseStatic (-want +got):\n%s", diff)
+	}
+}
+
 func TestParseStaticStream_TripShapesCarryOnlyTheirID(t *testing.T) {
 	feed := syntheticFeed(2, 3)
 	stream, err := ParseStaticStream(bytes.NewReader(feed), int64(len(feed)), ParseStaticOptions{})

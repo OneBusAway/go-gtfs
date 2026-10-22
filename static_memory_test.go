@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/OneBusAway/go-gtfs/constants"
+	"github.com/OneBusAway/go-gtfs/warnings"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -321,6 +323,7 @@ func TestParseStatic_StopTimesNone(t *testing.T) {
 		}
 		full.Trips[i].StopTimes = nil
 	}
+	dropStopTimeWarnings(full)
 	if diff := cmp.Diff(dumpStatic(full), dumpStatic(result)); diff != "" {
 		t.Errorf("result differs from a full parse beyond stop times:\n%s", diff)
 	}
@@ -368,6 +371,7 @@ func TestParseStatic_StopTimesStopsOnly(t *testing.T) {
 		}
 		full.Trips[i].StopTimes = nil
 	}
+	dropStopTimeWarnings(full)
 	if diff := cmp.Diff(dumpStatic(full), dumpStatic(result)); diff != "" {
 		t.Errorf("result differs from a full parse beyond stop times:\n%s", diff)
 	}
@@ -470,4 +474,17 @@ func TestParseStatic_InterleavedStopTimesMemory(t *testing.T) {
 			}
 		})
 	}
+}
+
+// dropStopTimeWarnings removes the warnings a full parse raises on
+// stop_times.txt rows, which a parse that skips or slims stop times never
+// sees.
+func dropStopTimeWarnings(s *Static) {
+	var kept []warnings.StaticWarning
+	for _, w := range s.Warnings {
+		if w.File != constants.StopTimesFile {
+			kept = append(kept, w)
+		}
+	}
+	s.Warnings = kept
 }
