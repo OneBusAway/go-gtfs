@@ -1,6 +1,6 @@
 module github.com/OneBusAway/go-gtfs
 
-go 1.18
+go 1.25.0
 
 require (
 	github.com/fatih/color v1.13.0

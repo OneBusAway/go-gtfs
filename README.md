@@ -25,6 +25,11 @@ this package is under active development and backwards incompatible changes are 
 We're eventually planning to release a `v1.0.0` version, and after that all changes
 will be backwards compatible and consistent with semantic versioning.
 
+**Go version support**:
+this package supports the current Go release and the two releases before it.
+When a new Go release comes out, the minimum version in `go.mod` moves up to match.
+The minimum is currently Go 1.25.
+
 ## Examples
 
 Parse the GTFS static feed for the New York City Subway:
