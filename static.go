@@ -58,6 +58,11 @@ type Static struct {
 	// rules leave out, so a partial set would change what the rest match.
 	Timeframes   []Timeframe
 	FareLegRules []FareLegRule
+	// FareLegJoinRules and FareTransferRules are likewise dropped if their
+	// file cannot be read. FareTransferRules is also dropped when the leg
+	// rules are, since its leg groups refer to them.
+	FareLegJoinRules  []FareLegJoinRule
+	FareTransferRules []FareTransferRule
 	// Attributions with no Agency, Route or Trip apply to the whole feed.
 	Attributions []Attribution
 
@@ -428,6 +433,7 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 	// be read; both affect which fare leg rules can be kept.
 	var lostTimeframes map[string]bool
 	timeframesUnreadable := false
+	legRulesUnreadable := false
 	// Set when a Fares V1 file cannot be read or lacks a required column, so
 	// that both are dropped.
 	faresV1Unreadable := false
@@ -678,7 +684,32 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 				return
 			},
 			Optional: true,
-			Discard:  func() { result.FareLegRules = nil },
+			Discard: func() {
+				result.FareLegRules = nil
+				legRulesUnreadable = true
+			},
+		},
+		{
+			File: constants.FareLegJoinRulesFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				result.FareLegJoinRules, w = parseFareLegJoinRules(file, result.Networks, stopIdToStop)
+				return
+			},
+			Optional: true,
+			Discard:  func() { result.FareLegJoinRules = nil },
+		},
+		{
+			File: constants.FareTransferRulesFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				// An empty leg group matches the groups the other rules
+				// leave out, so these cannot be read without the leg rules.
+				if !timeframesUnreadable && !legRulesUnreadable {
+					result.FareTransferRules, w = parseFareTransferRules(file, result.FareLegRules, result.FareProducts)
+				}
+				return
+			},
+			Optional: true,
+			Discard:  func() { result.FareTransferRules = nil },
 		},
 		{
 			File: "shapes.txt",
