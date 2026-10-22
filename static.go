@@ -754,9 +754,7 @@ func parseStops(csv *csv.File, inheritWheelchairBoarding bool) ([]Stop, []warnin
 	stopIdToParent := map[string]string{}
 	for csv.NextRow() {
 		stopID := idColumn.Read()
-		if parentStopId := parentStationColumn.Read(); parentStopId != "" {
-			stopIdToParent[stopID] = parentStopId
-		}
+		parentStopId := parentStationColumn.Read()
 		rawType := typeColumn.Read()
 		stopType, ok := parseStopType(rawType)
 		stop := Stop{
@@ -777,6 +775,9 @@ func parseStops(csv *csv.File, inheritWheelchairBoarding bool) ([]Stop, []warnin
 		if missingKeys := csv.MissingRowKeys(); len(missingKeys) > 0 {
 			log.Printf("Skipping stop %+v because of missing keys %s", stop, missingKeys)
 			continue
+		}
+		if parentStopId != "" {
+			stopIdToParent[stopID] = parentStopId
 		}
 		if !ok {
 			w = append(w, warnings.NewStaticWarning(csv, warnings.StopInvalidLocationType{StopID: stopID, Value: rawType}))

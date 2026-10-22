@@ -429,6 +429,16 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
+			desc: "skipped stop row does not attach its parent to another stop",
+			content: newZipBuilder().add(
+				"stops.txt",
+				"stop_id,parent_station\na,\nb,\n,b",
+			).build(),
+			expected: &Static{
+				Stops: []Stop{{Id: "a"}, {Id: "b"}},
+			},
+		},
+		{
 			desc: "padded location_type is trimmed",
 			content: newZipBuilder().add(
 				"stops.txt",
