@@ -283,6 +283,55 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
+			desc: "stop with tts_stop_name",
+			content: newZipBuilder().add(
+				"stops.txt",
+				"stop_id,stop_name,tts_stop_name",
+				"a,St. Mary's,Saint Mary's",
+			).build(),
+			expected: &Static{
+				Stops: []Stop{
+					{
+						Id:      "a",
+						Name:    "St. Mary's",
+						TtsName: "Saint Mary's",
+					},
+				},
+			},
+		},
+		{
+			desc: "stop without tts_stop_name column",
+			content: newZipBuilder().add(
+				"stops.txt",
+				"stop_id,stop_name",
+				"a,St. Mary's",
+			).build(),
+			expected: &Static{
+				Stops: []Stop{
+					{
+						Id:   "a",
+						Name: "St. Mary's",
+					},
+				},
+			},
+		},
+		{
+			desc: "stop with empty tts_stop_name does not fall back to stop_name",
+			content: newZipBuilder().add(
+				"stops.txt",
+				"stop_id,stop_name,tts_stop_name",
+				"a,St. Mary's,",
+			).build(),
+			expected: &Static{
+				Stops: []Stop{
+					{
+						Id:   "a",
+						Name: "St. Mary's",
+					},
+				},
+			},
+		},
+		{
 			desc: "stop with parent",
 			content: newZipBuilder().add(
 				"stops.txt",
