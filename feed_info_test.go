@@ -40,9 +40,11 @@ func TestParseFeedInfo(t *testing.T) {
 		wantWarnings []warnings.StaticWarningKind
 	}{
 		{
-			desc:  "no feed_info.txt",
-			lines: nil,
-			want:  nil,
+			desc: "no feed_info.txt",
+		},
+		{
+			desc:  "empty feed_info.txt is treated as absent",
+			lines: []string{""},
 		},
 		{
 			desc: "all fields",
@@ -121,7 +123,6 @@ func TestParseFeedInfo(t *testing.T) {
 				"feed_publisher_name,feed_publisher_url",
 				"Metro,https://example.com",
 			},
-			want: nil,
 			wantWarnings: []warnings.StaticWarningKind{
 				warnings.MissingColumns{Columns: []string{"feed_lang"}},
 			},
@@ -129,7 +130,6 @@ func TestParseFeedInfo(t *testing.T) {
 		{
 			desc:  "header without rows",
 			lines: []string{"feed_publisher_name,feed_publisher_url,feed_lang"},
-			want:  nil,
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
@@ -141,16 +141,6 @@ func TestParseFeedInfo(t *testing.T) {
 				t.Errorf("Warnings mismatch (-got +want):\n%s", diff)
 			}
 		})
-	}
-}
-
-func TestParseFeedInfo_EmptyFileIsAbsent(t *testing.T) {
-	static := parseFeedInfoFeed(t, "")
-	if static.FeedInfo != nil {
-		t.Errorf("FeedInfo = %+v, want nil", static.FeedInfo)
-	}
-	if len(static.Warnings) != 0 {
-		t.Errorf("Warnings = %v, want none", static.Warnings)
 	}
 }
 
