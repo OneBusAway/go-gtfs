@@ -643,7 +643,7 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 			Optional: true,
 		},
 		{
-			File: "calendar.txt",
+			File: constants.CalendarFile,
 			Action: func(file *csv.File) (w []warnings.StaticWarning) {
 				parseCalendar(file, serviceIdToService, timezone)
 				return
@@ -651,7 +651,7 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 			Optional: true,
 		},
 		{
-			File: "calendar_dates.txt",
+			File: constants.CalendarDatesFile,
 			Action: func(file *csv.File) (w []warnings.StaticWarning) {
 				parseCalendarDates(file, serviceIdToService, timezone)
 				return
@@ -723,7 +723,7 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 			Discard:  func() { result.FareTransferRules = nil },
 		},
 		{
-			File: "shapes.txt",
+			File: constants.ShapesFile,
 			Action: func(file *csv.File) (w []warnings.StaticWarning) {
 				if stream != nil {
 					stream.countShapeRows(file)
@@ -750,7 +750,7 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 			Optional: true,
 		},
 		{
-			File: "trips.txt",
+			File: constants.TripsFile,
 			Action: func(file *csv.File) (w []warnings.StaticWarning) {
 				result.Trips = parseScheduledTrips(file, routeIdToRoute, result.Services, shapeIdToShape)
 				for idx, trip := range result.Trips {
@@ -778,7 +778,7 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 			Discard: func() {},
 		},
 		{
-			File: "frequencies.txt",
+			File: constants.FrequenciesFile,
 			Action: func(file *csv.File) (w []warnings.StaticWarning) {
 				parseFrequencies(file, tripIdToScheduledTrip)
 				return

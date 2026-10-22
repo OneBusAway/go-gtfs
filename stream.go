@@ -121,7 +121,7 @@ func (s *StaticStream) countShapeRows(file *csv.File) {
 // time, say) most of the file. It stops at the first error fn returns and
 // returns it.
 func (s *StaticStream) EachTripStopTimes(fn func(tripIndex int, stopTimes []ScheduledStopTime) error) error {
-	file, err := s.open("stop_times.txt")
+	file, err := s.open(constants.StopTimesFile)
 	if err != nil {
 		return err
 	}
@@ -154,7 +154,7 @@ func (s *StaticStream) EachShape(fn func(Shape) error) error {
 	if len(s.shapeRowCounts) == 0 {
 		return nil
 	}
-	file, err := s.open("shapes.txt")
+	file, err := s.open(constants.ShapesFile)
 	if err != nil {
 		return err
 	}
