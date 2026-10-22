@@ -40,6 +40,41 @@ func parseBikesAllowed(s string) BikesAllowed {
 	}
 }
 
+// CarsAllowed describes whether cars are allowed on a scheduled trip.
+//
+// This is a Go representation of the enum described in the `cars_allowed` field of `trips.txt`.
+type CarsAllowed int32
+
+const (
+	CarsAllowed_NotSpecified CarsAllowed = 0
+	CarsAllowed_Allowed      CarsAllowed = 1
+	CarsAllowed_NotAllowed   CarsAllowed = 2
+)
+
+func (c CarsAllowed) String() string {
+	switch c {
+	case CarsAllowed_NotSpecified:
+		return "NOT_SPECIFIED"
+	case CarsAllowed_Allowed:
+		return "ALLOWED"
+	case CarsAllowed_NotAllowed:
+		return "NOT_ALLOWED"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+func parseCarsAllowed(s string) CarsAllowed {
+	switch s {
+	case "1":
+		return CarsAllowed_Allowed
+	case "2":
+		return CarsAllowed_NotAllowed
+	default:
+		return CarsAllowed_NotSpecified
+	}
+}
+
 // DirectionID is a mechanism for distinguishing between trips going in the opposite direction.
 type DirectionID uint8
 

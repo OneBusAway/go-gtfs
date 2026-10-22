@@ -2226,6 +2226,81 @@ func TestParseStatic_PickupDropOffTypeDefaults(t *testing.T) {
 	}
 }
 
+func TestParseStatic_CarsAllowed(t *testing.T) {
+	const header = "route_id,service_id,trip_id"
+
+	for _, tc := range []struct {
+		desc     string
+		trips    []string
+		expected CarsAllowed
+	}{
+		{
+			desc: "column absent",
+			trips: []string{
+				header,
+				"route_id,service_id,trip_id",
+			},
+			expected: CarsAllowed_NotSpecified,
+		},
+		{
+			desc: "column present but blank",
+			trips: []string{
+				header + ",cars_allowed",
+				"route_id,service_id,trip_id,",
+			},
+			expected: CarsAllowed_NotSpecified,
+		},
+		{
+			desc: "explicit zero",
+			trips: []string{
+				header + ",cars_allowed",
+				"route_id,service_id,trip_id,0",
+			},
+			expected: CarsAllowed_NotSpecified,
+		},
+		{
+			desc: "allowed",
+			trips: []string{
+				header + ",cars_allowed",
+				"route_id,service_id,trip_id,1",
+			},
+			expected: CarsAllowed_Allowed,
+		},
+		{
+			desc: "not allowed",
+			trips: []string{
+				header + ",cars_allowed",
+				"route_id,service_id,trip_id,2",
+			},
+			expected: CarsAllowed_NotAllowed,
+		},
+		{
+			desc: "unrecognized value",
+			trips: []string{
+				header + ",cars_allowed",
+				"route_id,service_id,trip_id,7",
+			},
+			expected: CarsAllowed_NotSpecified,
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			content := newZipBuilderWithDefaults().add("trips.txt", tc.trips...).build()
+
+			static, err := ParseStatic(content, ParseStaticOptions{})
+			if err != nil {
+				t.Fatalf("ParseStatic() got error %v, want nil", err)
+			}
+			if len(static.Trips) != 1 {
+				t.Fatalf("got %d trips, want exactly 1", len(static.Trips))
+			}
+
+			if got := static.Trips[0].CarsAllowed; got != tc.expected {
+				t.Errorf("CarsAllowed = %v, want %v", got, tc.expected)
+			}
+		})
+	}
+}
+
 func TestParseStatic_ContinuousPickupDropOffDefaultToNo(t *testing.T) {
 	// GTFS defaults continuous_pickup/continuous_drop_off to 1 (No), unlike
 	// pickup_type/drop_off_type which default to 0 (Yes). This pins that

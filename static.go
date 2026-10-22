@@ -134,6 +134,7 @@ type ScheduledTrip struct {
 	BlockID              string
 	WheelchairAccessible WheelchairBoarding
 	BikesAllowed         BikesAllowed
+	CarsAllowed          CarsAllowed
 	StopTimes            []ScheduledStopTime
 	Shape                *Shape
 	Frequencies          []Frequency
@@ -1130,6 +1131,7 @@ func parseScheduledTrips(csv *csv.File, routes []Route, services []Service, shap
 	blockIDColumn := csv.OptionalColumn("block_id")
 	wheelchairAccessibleColumn := csv.OptionalColumn("wheelchair_accessible")
 	bikesAllowedColumn := csv.OptionalColumn("bikes_allowed")
+	carsAllowedColumn := csv.OptionalColumn("cars_allowed")
 	shapeIDColumn := csv.OptionalColumn("shape_id")
 	safeDurationFactorColumn := csv.OptionalColumn("safe_duration_factor")
 	safeDurationOffsetColumn := csv.OptionalColumn("safe_duration_offset")
@@ -1159,6 +1161,7 @@ func parseScheduledTrips(csv *csv.File, routes []Route, services []Service, shap
 			BlockID:              blockIDColumn.Read(),
 			WheelchairAccessible: parseWheelchairBoarding(wheelchairAccessibleColumn.Read()),
 			BikesAllowed:         parseBikesAllowed(bikesAllowedColumn.ReadOr("")),
+			CarsAllowed:          parseCarsAllowed(carsAllowedColumn.ReadOr("")),
 			SafeDurationFactor:   parseFloat64(safeDurationFactorColumn.Read()),
 			SafeDurationOffset:   parseFloat64(safeDurationOffsetColumn.Read()),
 		}
