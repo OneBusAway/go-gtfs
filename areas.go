@@ -26,12 +26,19 @@ func (a *Area) Contains(stop *Stop) bool {
 	if stop == nil {
 		return false
 	}
-	if slices.Contains(stop.Areas, a) {
+	if a.listed(stop) {
 		return true
 	}
 	parent := stop.Parent
 	return stop.Type == StopType_Stop && len(stop.Areas) == 0 &&
-		parent != nil && parent.Type == StopType_Station && slices.Contains(parent.Areas, a)
+		parent != nil && parent.Type == StopType_Station && a.listed(parent)
+}
+
+// listed reports whether stop_areas.txt lists stop in the area. It matches
+// by ID, not pointer, so a copy of the Area (such as a range loop variable
+// over Static.Areas) still works.
+func (a *Area) listed(stop *Stop) bool {
+	return slices.ContainsFunc(stop.Areas, func(b *Area) bool { return b.Id == a.Id })
 }
 
 // parseAreas reads areas.txt. A row with an empty or repeated area_id is
@@ -66,9 +73,8 @@ func parseAreas(csv *csv.File) ([]Area, []warnings.StaticWarning) {
 }
 
 // parseStopAreas reads stop_areas.txt into the areas' Stops and the stops'
-// Areas. A row with a
-// missing value, an unknown ID, or that repeats an earlier row is skipped
-// with a warning.
+// Areas. A row with a missing value, an unknown ID, or that repeats an
+// earlier row is skipped with a warning.
 func parseStopAreas(csv *csv.File, areas []Area, stopIdToStop map[string]*Stop) []warnings.StaticWarning {
 	areaIDColumn := csv.RequiredColumn("area_id")
 	stopIDColumn := csv.RequiredColumn("stop_id")

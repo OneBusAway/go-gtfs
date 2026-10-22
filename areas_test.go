@@ -218,3 +218,14 @@ func TestParseAreas_ComparableWithCmp(t *testing.T) {
 		t.Errorf("Areas differ from themselves:\n%s", diff)
 	}
 }
+
+// Contains works on a copy of an Area, such as a range loop variable.
+func TestAreaContains_Copy(t *testing.T) {
+	static := parseAreasFeed(t, []string{"area_id", "a"}, []string{"area_id,stop_id", "a,ST"})
+	stops := stopsByID(static.Stops)
+	for _, a := range static.Areas {
+		if !a.Contains(stops["ST"]) || !a.Contains(stops["P1"]) {
+			t.Errorf("copy of area %q: Contains(ST), Contains(P1) = %t, %t, want true, true", a.Id, a.Contains(stops["ST"]), a.Contains(stops["P1"]))
+		}
+	}
+}
