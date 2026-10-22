@@ -2,6 +2,7 @@ package gtfs
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/OneBusAway/go-gtfs/csv"
 	"github.com/OneBusAway/go-gtfs/warnings"
@@ -26,8 +27,8 @@ type Translation struct {
 
 // parseTranslations reads translations.txt. A row is skipped with a warning
 // if a required value is missing or it does not select its record in exactly
-// one of the ways GTFS allows. Table, field and language names are interned,
-// since a large feed repeats a few of them across many rows.
+// one of the ways GTFS allows. Every value is interned: a large feed repeats
+// most of them across many rows, such as one headsign for each trip using it.
 func parseTranslations(csv *csv.File) ([]Translation, []warnings.StaticWarning) {
 	tableNameColumn := csv.RequiredColumn("table_name")
 	fieldNameColumn := csv.RequiredColumn("field_name")
@@ -43,7 +44,7 @@ func parseTranslations(csv *csv.File) ([]Translation, []warnings.StaticWarning) 
 
 	var translations []Translation
 	var w []warnings.StaticWarning
-	names := stringInterner{}
+	values := stringInterner{}
 	for csv.NextRow() {
 		t := Translation{
 			TableName:   tableNameColumn.Read(),
@@ -75,12 +76,13 @@ func parseTranslations(csv *csv.File) ([]Translation, []warnings.StaticWarning) 
 			w = append(w, warnings.NewStaticWarning(csv, warnings.TranslationInvalid{Reason: reason}))
 			continue
 		}
-		t.TableName = names.intern(t.TableName)
-		t.FieldName = names.intern(t.FieldName)
-		t.Language = names.intern(t.Language)
+		for _, f := range []*string{&t.TableName, &t.FieldName, &t.Language, &t.Translation, &t.RecordId, &t.RecordSubId, &t.FieldValue} {
+			*f = values.intern(*f)
+		}
 		translations = append(translations, t)
 	}
-	return translations, w
+	// Drop the slack append left, which on a large file is many megabytes.
+	return slices.Clip(slices.Clone(translations)), w
 }
 
 // Translator looks up translations by the record and value they apply to.

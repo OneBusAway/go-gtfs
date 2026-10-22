@@ -1,6 +1,8 @@
 package gtfs
 
 import (
+	"unsafe"
+
 	"testing"
 
 	"github.com/OneBusAway/go-gtfs/constants"
@@ -172,5 +174,25 @@ func TestTranslator(t *testing.T) {
 				t.Errorf("Translate() = %q, %t, want %q, %t", got, ok, tc.want, tc.wantOK)
 			}
 		})
+	}
+}
+
+// Large feeds repeat translation values across many rows, for example the
+// same headsign for every trip that uses it, so equal values share storage.
+func TestParseTranslations_RepeatedValuesShareStorage(t *testing.T) {
+	static := parseTranslationsFeed(t, false, translationsHeader,
+		"stop_times,stop_headsign,sv,Centrum,T1,3,",
+		"stop_times,stop_headsign,sv,Centrum,T1,4,",
+		"stop_times,stop_headsign,sv,Centrum,T2,3,",
+	)
+	a, b, c := static.Translations[0], static.Translations[1], static.Translations[2]
+	if unsafe.StringData(a.Translation) != unsafe.StringData(b.Translation) {
+		t.Error("equal Translation values do not share storage")
+	}
+	if unsafe.StringData(a.RecordId) != unsafe.StringData(b.RecordId) {
+		t.Error("equal RecordId values do not share storage")
+	}
+	if unsafe.StringData(a.RecordSubId) != unsafe.StringData(c.RecordSubId) {
+		t.Error("equal RecordSubId values do not share storage")
 	}
 }
