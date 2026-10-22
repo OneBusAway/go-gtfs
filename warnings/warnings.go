@@ -157,6 +157,18 @@ func (w TransferMissingTrip) Error() string {
 	return fmt.Sprintf("linked-trip transfer is missing %s", w.Column)
 }
 
+// TransferInvalidType is raised when a transfers.txt row has a transfer_type
+// that GTFS does not define. Only empty and 0 through 5 are valid. The row is
+// skipped, because reading the value as some other type could change what
+// the rule means.
+type TransferInvalidType struct {
+	Value string
+}
+
+func (w TransferInvalidType) Error() string {
+	return fmt.Sprintf("transfer has invalid transfer_type %q", w.Value)
+}
+
 // TransferUnknownReference is raised when a transfers.txt row names a stop,
 // route or trip that is not in the parsed feed: either stops.txt, routes.txt
 // or trips.txt does not define it, or its row there was skipped. The

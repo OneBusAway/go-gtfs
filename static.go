@@ -925,7 +925,14 @@ func parseTransfers(csv *csv.File, stopIdToStop map[string]*Stop, routeIdToRoute
 		}
 	}
 	for csv.NextRow() {
-		transferType := parseTransferType(typeColumn.Read())
+		rawType := typeColumn.Read()
+		transferType, ok := parseTransferType(rawType)
+		if !ok {
+			// Guessing the type could change what the rule means, for
+			// example by turning a linked-trip row into a stop transfer.
+			w = append(w, warnings.NewStaticWarning(csv, warnings.TransferInvalidType{Value: rawType}))
+			continue
+		}
 		linkedTrips := transferType == TransferType_InSeat || transferType == TransferType_InSeatNotAllowed
 
 		fromStopID := fromStopIDColumn.Read()
