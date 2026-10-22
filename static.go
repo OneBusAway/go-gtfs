@@ -48,6 +48,11 @@ type Static struct {
 	// every trip.
 	FareAttributes []FareAttribute
 	FareRules      []FareRule
+	// RiderCategories, FareMedia and FareProducts are GTFS-Fares V2, which
+	// GTFS recommends using instead of V1 when a feed has both.
+	RiderCategories []RiderCategory
+	FareMedia       []FareMedia
+	FareProducts    []FareProduct
 	// Attributions with no Agency, Route or Trip apply to the whole feed.
 	Attributions []Attribution
 
@@ -515,6 +520,34 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 			},
 			Optional: true,
 			Discard:  dropFaresV1,
+		},
+		{
+			File: constants.RiderCategoriesFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				result.RiderCategories, w = parseRiderCategories(file)
+				return
+			},
+			Optional: true,
+			// Each row stands alone, so rows read before the error are kept.
+			Discard: func() {},
+		},
+		{
+			File: constants.FareMediaFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				result.FareMedia, w = parseFareMedia(file)
+				return
+			},
+			Optional: true,
+			Discard:  func() {},
+		},
+		{
+			File: constants.FareProductsFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				result.FareProducts, w = parseFareProducts(file, result.RiderCategories, result.FareMedia)
+				return
+			},
+			Optional: true,
+			Discard:  func() {},
 		},
 		{
 			File: constants.RouteNetworksFile,
@@ -1824,6 +1857,22 @@ func faresByID(fares []FareAttribute) map[string]*FareAttribute {
 		idToFare[fares[i].Id] = &fares[i]
 	}
 	return idToFare
+}
+
+func riderCategoriesByID(categories []RiderCategory) map[string]*RiderCategory {
+	idToCategory := make(map[string]*RiderCategory, len(categories))
+	for i := range categories {
+		idToCategory[categories[i].Id] = &categories[i]
+	}
+	return idToCategory
+}
+
+func fareMediaByID(media []FareMedia) map[string]*FareMedia {
+	idToMedia := make(map[string]*FareMedia, len(media))
+	for i := range media {
+		idToMedia[media[i].Id] = &media[i]
+	}
+	return idToMedia
 }
 
 func areasByID(areas []Area) map[string]*Area {
