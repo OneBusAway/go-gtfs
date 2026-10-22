@@ -145,3 +145,25 @@ type BookingRuleInvalid struct {
 func (w BookingRuleInvalid) Error() string {
 	return fmt.Sprintf("booking rule %q is invalid: %s", w.BookingRuleID, w.Reason)
 }
+
+// TransferMissingTrip is raised when a transfers.txt row links trips
+// (transfer_type 4 or 5) but leaves from_trip_id or to_trip_id empty. GTFS
+// requires both for linked trips. The row is skipped.
+type TransferMissingTrip struct {
+	Column string
+}
+
+func (w TransferMissingTrip) Error() string {
+	return fmt.Sprintf("linked-trip transfer is missing %s", w.Column)
+}
+
+// TransferUnknownReference is raised when a transfers.txt row names a trip
+// that trips.txt does not define. The row is skipped.
+type TransferUnknownReference struct {
+	Column string
+	ID     string
+}
+
+func (w TransferUnknownReference) Error() string {
+	return fmt.Sprintf("transfer references unknown %s %q", w.Column, w.ID)
+}

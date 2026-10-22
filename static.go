@@ -488,9 +488,9 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 			},
 		},
 		{
-			File: "transfers.txt",
+			File: constants.TransfersFile,
 			Action: func(file *csv.File) (w []warnings.StaticWarning) {
-				result.Transfers = parseTransfers(file, result.Stops, result.Routes, result.Trips)
+				result.Transfers, w = parseTransfers(file, result.Stops, result.Routes, result.Trips)
 				return
 			},
 			Optional: true,
@@ -861,20 +861,19 @@ func parseFloat64(s string) *float64 {
 	return &f
 }
 
-func parseTransfers(csv *csv.File, stops []Stop, routes []Route, trips []ScheduledTrip) []Transfer {
-	fromStopIDColumn := csv.RequiredColumn("from_stop_id")
-	toStopIDColumn := csv.RequiredColumn("to_stop_id")
+// parseTransfers reads transfers.txt. from_stop_id and to_stop_id are required
+// unless the row links trips (transfer_type 4 or 5), in which case
+// from_trip_id and to_trip_id are required instead and a linked trip's stop
+// may be nil.
+func parseTransfers(csv *csv.File, stops []Stop, routes []Route, trips []ScheduledTrip) ([]Transfer, []warnings.StaticWarning) {
+	fromStopIDColumn := csv.OptionalColumn("from_stop_id")
+	toStopIDColumn := csv.OptionalColumn("to_stop_id")
 	fromRouteIDColumn := csv.OptionalColumn("from_route_id")
 	toRouteIDColumn := csv.OptionalColumn("to_route_id")
 	fromTripIDColumn := csv.OptionalColumn("from_trip_id")
 	toTripIDColumn := csv.OptionalColumn("to_trip_id")
 	typeColumn := csv.OptionalColumn("transfer_type")
 	transferTimeColumn := csv.OptionalColumn("min_transfer_time")
-
-	if err := csv.MissingRequiredColumns(); err != nil {
-		fmt.Println(err)
-		return nil
-	}
 
 	stopIdToStop := map[string]*Stop{}
 	for i := range stops {
@@ -890,39 +889,76 @@ func parseTransfers(csv *csv.File, stops []Stop, routes []Route, trips []Schedul
 	}
 
 	var transfers []Transfer
+	var w []warnings.StaticWarning
 	for csv.NextRow() {
+		transferType := parseTransferType(typeColumn.Read())
+		linkedTrips := transferType == TransferType_InSeat || transferType == TransferType_InSeatNotAllowed
+
+		fromTripID := fromTripIDColumn.Read()
+		toTripID := toTripIDColumn.Read()
+		fromTrip := tripIdToTrip[fromTripID]
+		toTrip := tripIdToTrip[toTripID]
+		if linkedTrips {
+			skip := false
+			for _, ref := range []struct {
+				column string
+				id     string
+				trip   *ScheduledTrip
+			}{
+				{"from_trip_id", fromTripID, fromTrip},
+				{"to_trip_id", toTripID, toTrip},
+			} {
+				switch {
+				case ref.id == "":
+					w = append(w, warnings.NewStaticWarning(csv, warnings.TransferMissingTrip{Column: ref.column}))
+					skip = true
+				case ref.trip == nil:
+					w = append(w, warnings.NewStaticWarning(csv, warnings.TransferUnknownReference{Column: ref.column, ID: ref.id}))
+					skip = true
+				}
+			}
+			if skip {
+				continue
+			}
+		}
+
 		fromStopID := fromStopIDColumn.Read()
 		toStopID := toStopIDColumn.Read()
-		if missingKeys := csv.MissingRowKeys(); len(missingKeys) > 0 {
-			log.Printf("Skipping transfer because of missing keys %s", missingKeys)
+		if !linkedTrips && (fromStopID == "" || toStopID == "") {
+			log.Printf("Skipping transfer because from_stop_id %q or to_stop_id %q is empty", fromStopID, toStopID)
 			continue
 		}
-		fromStop, fromStopOk := stopIdToStop[fromStopID]
-		toStop, toStopOk := stopIdToStop[toStopID]
-		if !fromStopOk {
-			log.Printf("Skipping transfer because from_stop_id %q is invalid", fromStopID)
-			continue
+		var fromStop, toStop *Stop
+		if fromStopID != "" {
+			fromStop = stopIdToStop[fromStopID]
+			if fromStop == nil {
+				log.Printf("Skipping transfer because from_stop_id %q is invalid", fromStopID)
+				continue
+			}
 		}
-		if !toStopOk {
-			log.Printf("Skipping transfer because to_stop_id %q is invalid", toStopID)
-			continue
+		if toStopID != "" {
+			toStop = stopIdToStop[toStopID]
+			if toStop == nil {
+				log.Printf("Skipping transfer because to_stop_id %q is invalid", toStopID)
+				continue
+			}
 		}
-		if fromStop.Id == toStop.Id {
+		if fromStop != nil && toStop != nil && fromStop.Id == toStop.Id {
 			// log.Printf("Skipping transfer between the same stop %q", fromStop.Id)
 			continue
 		}
 		transfers = append(transfers, Transfer{
 			From:            fromStop,
 			To:              toStop,
-			Type:            parseTransferType(typeColumn.Read()),
+			Type:            transferType,
 			MinTransferTime: parseInt32(transferTimeColumn.Read()),
 			FromRoute:       routeIdToRoute[fromRouteIDColumn.Read()],
 			ToRoute:         routeIdToRoute[toRouteIDColumn.Read()],
-			FromTrip:        tripIdToTrip[fromTripIDColumn.Read()],
-			ToTrip:          tripIdToTrip[toTripIDColumn.Read()],
+			FromTrip:        fromTrip,
+			ToTrip:          toTrip,
 		})
 	}
-	return transfers
+	return transfers, w
 }
 
 func parseInt32(s string) *int32 {

@@ -121,6 +121,15 @@ earlier versions should note:
   `LocationsFileInvalid` warning; a single unusable Feature is skipped with a
   `LocationInvalidGeometry` warning. Neither stops the rest of the feed from parsing.
 
+## transfers.txt and upgrading
+
+- `transfer_type` values `4` and `5` (linked trips) now parse as `TransferType_InSeat` and
+  `TransferType_InSeatNotAllowed`. Earlier versions read them as `TransferType_Recommended`.
+- For linked trips, `from_stop_id` and `to_stop_id` are optional, so `Transfer.From` and
+  `Transfer.To` may be nil. Check them before use.
+- A linked-trip row without a known `from_trip_id` and `to_trip_id` is skipped with a
+  `TransferMissingTrip` or `TransferUnknownReference` warning.
+
 ## Performance
 
 The package is designed to be about as fast as possible without resorting to unreadable code.

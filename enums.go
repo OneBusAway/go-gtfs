@@ -932,6 +932,12 @@ const (
 	TransferType_Timed        TransferType = 1
 	TransferType_RequiresTime TransferType = 2
 	TransferType_NotPossible  TransferType = 3
+	// TransferType_InSeat links two trips operated by the same vehicle;
+	// passengers can stay onboard from one trip to the next.
+	TransferType_InSeat TransferType = 4
+	// TransferType_InSeatNotAllowed links two trips operated by the same
+	// vehicle, but passengers must alight and re-board.
+	TransferType_InSeatNotAllowed TransferType = 5
 )
 
 func parseTransferType(s string) TransferType {
@@ -942,6 +948,10 @@ func parseTransferType(s string) TransferType {
 		return TransferType_RequiresTime
 	case "3":
 		return TransferType_NotPossible
+	case "4":
+		return TransferType_InSeat
+	case "5":
+		return TransferType_InSeatNotAllowed
 	default:
 		return TransferType_Recommended
 	}
@@ -957,6 +967,10 @@ func (t TransferType) String() string {
 		return "REQUIRES_TIME"
 	case TransferType_NotPossible:
 		return "NOT_POSSIBLE"
+	case TransferType_InSeat:
+		return "IN_SEAT"
+	case TransferType_InSeatNotAllowed:
+		return "IN_SEAT_NOT_ALLOWED"
 	default:
 		return "UNKNOWN"
 	}

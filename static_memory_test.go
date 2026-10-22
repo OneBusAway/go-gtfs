@@ -178,7 +178,7 @@ func dumpStatic(s *Static) string {
 		}
 	}
 	for _, t := range s.Transfers {
-		w("transfer %s %s %v", t.From.Id, t.To.Id, t.Type)
+		w("transfer %s %s %v", stopID(t.From), stopID(t.To), t.Type)
 	}
 	w("warnings %d", len(s.Warnings))
 	return b.String()
