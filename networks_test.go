@@ -171,6 +171,8 @@ func TestParseNetworks(t *testing.T) {
 	}
 }
 
+// The table only compares warning kinds; this checks the warning is about
+// routes.txt as a whole, not a row.
 func TestParseNetworks_DefinedTwiceIsAFileWarning(t *testing.T) {
 	static := parseNetworksFeed(t,
 		[]string{"route_id,route_type,network_id", "route_id,3,rail"},

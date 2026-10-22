@@ -57,10 +57,7 @@ func parseRouteNetworks(csv *csv.File, networks []Network, routeIdToRoute map[st
 		return w
 	}
 
-	networkIdToNetwork := make(map[string]*Network, len(networks))
-	for i := range networks {
-		networkIdToNetwork[networks[i].Id] = &networks[i]
-	}
+	networkIdToNetwork := networksByID(networks)
 	var w []warnings.StaticWarning
 	for csv.NextRow() {
 		networkID := networkIDColumn.Read()

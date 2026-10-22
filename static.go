@@ -403,7 +403,6 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 	// is absent.
 	var stopIdToStop map[string]*Stop
 	var routeIdToRoute map[string]*Route
-	var routeNetworkIDs []string
 	// GTFS forbids routes.txt network_id when either network file exists.
 	networkFilesPresent := !isAbsentOrEmpty(fileNameToFile[constants.NetworksFile]) || !isAbsentOrEmpty(fileNameToFile[constants.RouteNetworksFile])
 	timezone := time.UTC
@@ -448,8 +447,14 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 		{
 			File: constants.RoutesFile,
 			Action: func(file *csv.File) (w []warnings.StaticWarning) {
-				result.Routes, routeNetworkIDs = parseRoutes(file, result.Agencies)
+				var networkIDs []string
+				result.Routes, networkIDs = parseRoutes(file, result.Agencies)
 				routeIdToRoute = routesByID(result.Routes)
+				if !networkFilesPresent {
+					result.Networks = networksFromRoutes(result.Routes, networkIDs)
+				} else if slices.ContainsFunc(networkIDs, func(id string) bool { return id != "" }) {
+					w = append(w, warnings.NewFileWarning(constants.RoutesFile, warnings.NetworksDefinedTwice{}))
+				}
 				return
 			},
 		},
@@ -467,14 +472,6 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 			File: constants.RouteNetworksFile,
 			Action: func(file *csv.File) []warnings.StaticWarning {
 				return parseRouteNetworks(file, result.Networks, routeIdToRoute)
-			},
-			// Runs whether or not route_networks.txt exists.
-			PostProcess: func() {
-				if !networkFilesPresent {
-					result.Networks = networksFromRoutes(result.Routes, routeNetworkIDs)
-				} else if slices.ContainsFunc(routeNetworkIDs, func(id string) bool { return id != "" }) {
-					result.Warnings = append(result.Warnings, warnings.NewFileWarning(constants.RoutesFile, warnings.NetworksDefinedTwice{}))
-				}
 			},
 			Optional: true,
 			// Each row stands alone, so assignments made before the error
@@ -1749,6 +1746,14 @@ func agenciesByID(agencies []Agency) map[string]*Agency {
 		}
 	}
 	return idToAgency
+}
+
+func networksByID(networks []Network) map[string]*Network {
+	idToNetwork := make(map[string]*Network, len(networks))
+	for i := range networks {
+		idToNetwork[networks[i].Id] = &networks[i]
+	}
+	return idToNetwork
 }
 
 func levelsByID(levels []Level) map[string]*Level {
