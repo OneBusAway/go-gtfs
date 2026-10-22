@@ -1233,8 +1233,8 @@ func TestParse(t *testing.T) {
 					"service_id,0,0,0,0,0,0,0,20220504,20220507",
 			).add(
 				"trips.txt",
-				"route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,block_id,wheelchair_accessible,bikes_allowed\n"+
-					"route_id,service_id,a,b,c,1,block_id,0,2",
+				"route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,block_id,wheelchair_accessible,bikes_allowed,cars_allowed\n"+
+					"route_id,service_id,a,b,c,1,block_id,0,2,1",
 			).add(
 				"stop_times.txt",
 				"stop_id,trip_id,arrival_time,departure_time,stop_sequence,stop_headsign,pickup_type,drop_off_type,continuous_pickup,continuous_drop_off,shape_dist_traveled,timepoint\n"+
@@ -1256,6 +1256,7 @@ func TestParse(t *testing.T) {
 						BlockID:              "block_id",
 						WheelchairAccessible: WheelchairBoarding_NotSpecified,
 						BikesAllowed:         BikesAllowed_NotAllowed,
+						CarsAllowed:          CarsAllowed_Allowed,
 						StopTimes: []ScheduledStopTime{
 							{
 								Stop:                  &defaultStop,
@@ -2279,6 +2280,81 @@ func TestParseStatic_PickupDropOffTypeDefaults(t *testing.T) {
 			}
 			if stopTime.DropOffType != tc.expectedDropOff {
 				t.Errorf("DropOffType = %v, want %v", stopTime.DropOffType, tc.expectedDropOff)
+			}
+		})
+	}
+}
+
+func TestParseStatic_CarsAllowed(t *testing.T) {
+	const header = "route_id,service_id,trip_id"
+
+	for _, tc := range []struct {
+		desc     string
+		trips    []string
+		expected CarsAllowed
+	}{
+		{
+			desc: "column absent",
+			trips: []string{
+				header,
+				"route_id,service_id,trip_id",
+			},
+			expected: CarsAllowed_NotSpecified,
+		},
+		{
+			desc: "zero means not specified",
+			trips: []string{
+				header + ",cars_allowed",
+				"route_id,service_id,trip_id,0",
+			},
+			expected: CarsAllowed_NotSpecified,
+		},
+		{
+			desc: "one means allowed",
+			trips: []string{
+				header + ",cars_allowed",
+				"route_id,service_id,trip_id,1",
+			},
+			expected: CarsAllowed_Allowed,
+		},
+		{
+			desc: "two means not allowed",
+			trips: []string{
+				header + ",cars_allowed",
+				"route_id,service_id,trip_id,2",
+			},
+			expected: CarsAllowed_NotAllowed,
+		},
+		{
+			desc: "empty means not specified",
+			trips: []string{
+				header + ",cars_allowed",
+				"route_id,service_id,trip_id,",
+			},
+			expected: CarsAllowed_NotSpecified,
+		},
+		{
+			desc: "unknown value means not specified",
+			trips: []string{
+				header + ",cars_allowed",
+				"route_id,service_id,trip_id,3",
+			},
+			expected: CarsAllowed_NotSpecified,
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			content := newZipBuilderWithDefaults().add("trips.txt", tc.trips...).build()
+
+			static, err := ParseStatic(content, ParseStaticOptions{})
+			if err != nil {
+				t.Fatalf("ParseStatic() got error %v, want nil", err)
+			}
+			if len(static.Trips) != 1 {
+				t.Fatalf("got %d trips, want exactly 1", len(static.Trips))
+			}
+
+			if got := static.Trips[0].CarsAllowed; got != tc.expected {
+				t.Errorf("CarsAllowed = %v, want %v", got, tc.expected)
 			}
 		})
 	}
