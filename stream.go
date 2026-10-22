@@ -89,9 +89,7 @@ func (s *StaticStream) countStopTimeRows(file *csv.File, static *Static) []warni
 	s.refs = newStopTimeReferences(static)
 	reader, missing := newStopTimeReader(file, s.refs)
 	if missing != nil {
-		return []warnings.StaticWarning{
-			warnings.NewStaticWarning(file, warnings.MissingColumns{Columns: missing}),
-		}
+		return missingColumnsWarning(file, missing)
 	}
 	eachTripRow(file, reader.tripIDColumn, s.refs.tripIndexes, reader.read, func(tripIndex int, _ ScheduledStopTime) bool {
 		s.stopTimeCounts[tripIndex]++

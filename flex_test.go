@@ -305,6 +305,11 @@ func TestParseStatic_FlexStopTimeValidation(t *testing.T) {
 				},
 			}},
 		},
+		{
+			// The row is dropped for its trip, so its Flex rules aren't checked.
+			desc: "unknown trip with an unknown location",
+			row:  "no_such_trip,1,,nowhere,,,,08:00:00,17:00:00,,,,,",
+		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			content := newFlexZipBuilder().add("stop_times.txt", flexStopTimesHeader, tc.row).build()
