@@ -157,6 +157,17 @@ func (w TransferMissingTrip) Error() string {
 	return fmt.Sprintf("linked-trip transfer is missing %s", w.Column)
 }
 
+// TransferMissingStop is raised when a transfers.txt row that does not link
+// trips (transfer_type empty or 0 to 3) leaves from_stop_id or to_stop_id
+// empty. GTFS requires both for these types. The row is skipped.
+type TransferMissingStop struct {
+	Column string
+}
+
+func (w TransferMissingStop) Error() string {
+	return fmt.Sprintf("transfer is missing %s", w.Column)
+}
+
 // TransferInvalidType is raised when a transfers.txt row has a transfer_type
 // that GTFS does not define. Only empty and 0 through 5 are valid. The row is
 // skipped, because reading the value as some other type could change what

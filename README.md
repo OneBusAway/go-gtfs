@@ -149,6 +149,10 @@ earlier versions should note:
   to every route or trip at the stop.
 - A row whose `from_stop_id` or `to_stop_id` is not defined in `stops.txt` is skipped with a
   `TransferUnknownReference` warning. Earlier versions skipped it with only a log line.
+- A row of `transfer_type` empty or `0` to `3` with an empty `from_stop_id` or `to_stop_id` is
+  skipped with a `TransferMissingStop` warning. If the file has no `from_stop_id` or
+  `to_stop_id` column, the first such row adds one `MissingColumns` warning for the file.
+  Earlier versions skipped these rows with only a log line.
 
 ## Performance
 

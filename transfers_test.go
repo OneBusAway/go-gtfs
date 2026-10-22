@@ -259,16 +259,42 @@ func TestParseTransfers(t *testing.T) {
 			wantSummary: []string{"from=ST to=S1 fromRoute= toRoute= fromTrip= toTrip= type=REQUIRES_TIME min=60"},
 		},
 		{
-			desc:      "minimum time transfer without from_stop_id is skipped",
-			transfers: []string{header, ",S2,,,,,2,180"},
+			desc:         "minimum time transfer without from_stop_id is skipped",
+			transfers:    []string{header, ",S2,,,,,2,180"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferMissingStop{Column: "from_stop_id"}},
 		},
 		{
-			desc:      "recommended transfer without to_stop_id is skipped",
-			transfers: []string{header, "S1,,,,,,0,"},
+			desc:         "recommended transfer without to_stop_id is skipped",
+			transfers:    []string{header, "S1,,,,,,0,"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferMissingStop{Column: "to_stop_id"}},
 		},
 		{
 			desc:      "empty transfer_type without stop ids is skipped",
 			transfers: []string{header, ",,,,T1,T2,,"},
+			wantWarnings: []warnings.StaticWarningKind{
+				warnings.TransferMissingStop{Column: "from_stop_id"},
+				warnings.TransferMissingStop{Column: "to_stop_id"},
+			},
+		},
+		{
+			desc:      "file without stop id columns warns once for stop transfers",
+			transfers: []string{"from_trip_id,to_trip_id,transfer_type", "T1,T2,2", "T2,T1,2"},
+			wantWarnings: []warnings.StaticWarningKind{
+				warnings.MissingColumns{Columns: []string{"from_stop_id", "to_stop_id"}},
+			},
+		},
+		{
+			desc:         "file without from_stop_id column warns once for stop transfers",
+			transfers:    []string{"to_stop_id,transfer_type", "S1,2", "S2,1"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.MissingColumns{Columns: []string{"from_stop_id"}}},
+		},
+		{
+			desc:        "file without stop id columns keeps linked trips",
+			transfers:   []string{"from_trip_id,to_trip_id,transfer_type", "T1,T2,4", "T1,T2,2", "T2,T1,5"},
+			wantSummary: []string{"from= to= fromRoute= toRoute= fromTrip=T1 toTrip=T2 type=IN_SEAT min=<nil>", "from= to= fromRoute= toRoute= fromTrip=T2 toTrip=T1 type=IN_SEAT_NOT_ALLOWED min=<nil>"},
+			wantWarnings: []warnings.StaticWarningKind{
+				warnings.MissingColumns{Columns: []string{"from_stop_id", "to_stop_id"}},
+			},
 		},
 		{
 			desc:        "empty transfer_type is a recommended transfer",

@@ -885,6 +885,17 @@ func parseTransfers(csv *csv.File, stopIdToStop map[string]*Stop, routeIdToRoute
 	typeColumn := csv.OptionalColumn("transfer_type")
 	transferTimeColumn := csv.OptionalColumn("min_transfer_time")
 
+	// The stop columns are optional for linked trips only. If one is absent,
+	// a single warning is added on the first row that needs it.
+	var missingStopColumns []string
+	if !fromStopIDColumn.Exists() {
+		missingStopColumns = append(missingStopColumns, "from_stop_id")
+	}
+	if !toStopIDColumn.Exists() {
+		missingStopColumns = append(missingStopColumns, "to_stop_id")
+	}
+	reportedMissingStopColumns := false
+
 	var transfers []Transfer
 	var w []warnings.StaticWarning
 	// resolveStop looks up an optional stop id. ok is false, and a warning is
@@ -975,9 +986,25 @@ func parseTransfers(csv *csv.File, stopIdToStop map[string]*Stop, routeIdToRoute
 			continue
 		}
 
-		if !linkedTrips && (fromStopID == "" || toStopID == "") {
-			log.Printf("Skipping transfer because from_stop_id %q or to_stop_id %q is empty", fromStopID, toStopID)
-			continue
+		if !linkedTrips {
+			if len(missingStopColumns) > 0 {
+				if !reportedMissingStopColumns {
+					w = append(w, missingColumnsWarning(csv, missingStopColumns)...)
+					reportedMissingStopColumns = true
+				}
+				continue
+			}
+			for _, ref := range []struct{ column, id string }{
+				{"from_stop_id", fromStopID},
+				{"to_stop_id", toStopID},
+			} {
+				if ref.id == "" {
+					w = append(w, warnings.NewStaticWarning(csv, warnings.TransferMissingStop{Column: ref.column}))
+				}
+			}
+			if len(w) > warningsBefore {
+				continue
+			}
 		}
 		fromStop, ok := resolveStop("from_stop_id", fromStopID)
 		if !ok {
