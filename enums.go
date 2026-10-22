@@ -940,20 +940,24 @@ const (
 	TransferType_InSeatNotAllowed TransferType = 5
 )
 
-func parseTransferType(s string) TransferType {
-	switch s {
+// parseTransferType reads a transfers.txt transfer_type, ignoring surrounding
+// whitespace. Empty means 0. ok is false for any value GTFS does not define.
+func parseTransferType(s string) (t TransferType, ok bool) {
+	switch strings.TrimSpace(s) {
+	case "", "0":
+		return TransferType_Recommended, true
 	case "1":
-		return TransferType_Timed
+		return TransferType_Timed, true
 	case "2":
-		return TransferType_RequiresTime
+		return TransferType_RequiresTime, true
 	case "3":
-		return TransferType_NotPossible
+		return TransferType_NotPossible, true
 	case "4":
-		return TransferType_InSeat
+		return TransferType_InSeat, true
 	case "5":
-		return TransferType_InSeatNotAllowed
+		return TransferType_InSeatNotAllowed, true
 	default:
-		return TransferType_Recommended
+		return TransferType_Recommended, false
 	}
 }
 

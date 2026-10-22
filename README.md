@@ -130,6 +130,9 @@ earlier versions should note:
 
 - `transfer_type` values `4` and `5` (linked trips) now parse as `TransferType_InSeat` and
   `TransferType_InSeatNotAllowed`. Earlier versions read them as `TransferType_Recommended`.
+- A row whose `transfer_type` is not empty or `0` through `5` is skipped with a
+  `TransferInvalidType` warning. Earlier versions read it as `TransferType_Recommended`.
+  Whitespace around the value is ignored, so ` 2` now parses as `TransferType_RequiresTime`.
 - For linked trips, `from_stop_id` and `to_stop_id` are optional, so `Transfer.From` and
   `Transfer.To` may be nil. Check them before use.
 - A linked-trip row without a known `from_trip_id` and `to_trip_id` is skipped with a
