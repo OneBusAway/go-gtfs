@@ -39,10 +39,10 @@ func New(name constants.StaticFile, reader io.ReadCloser) (*File, error) {
 	// for populating static warnings.
 	csvReader.ReuseRecord = true
 	if err == io.EOF {
-		reader.Close()
+		_ = reader.Close()
 		return nil, fmt.Errorf("CSV file contains no rows")
 	} else if err != nil {
-		reader.Close()
+		_ = reader.Close()
 		return nil, err
 	}
 	m := map[string]int{}

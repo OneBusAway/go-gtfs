@@ -54,7 +54,7 @@ type ExtensionOpts struct {
 	ElevatorAlertsInformUsingStationIDs bool `yaml:"elevatorAlertsInformUsingStationIDs"`
 
 	// When there are no trains running for a route due to the standard timetable (e.g., there are no C trains
-	// overnight), the MTA publishes an alert. Arguably this is not really an alert becuase this information is
+	// overnight), the MTA publishes an alert. Arguably this is not really an alert because this information is
 	// already in the timetable.
 	//
 	// If true, these alerts are skipped.
