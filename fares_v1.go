@@ -152,9 +152,10 @@ func parseFareAttributes(csv *csv.File, agencies []Agency) (fares []FareAttribut
 // parseFareRules reads fare_rules.txt. A row with a missing or unknown
 // fare_id, or an unknown route_id, is skipped with a warning.
 //
-// GTFS reads a fare with no rules as applying to every trip, so a fare whose
-// rows were all skipped is removed from the returned fares, with a warning,
-// rather than left to apply everywhere. ok is false when the header lacks a
+// Skipping a row usually narrows its fare, but two cases would widen it, so
+// such a fare is removed from the returned fares, with a warning: GTFS reads
+// a fare with no rules as applying to every trip, and a trip must pass
+// through every contains_id zone, so losing one drops a requirement. ok is false when the header lacks a
 // required column, in which case no rule could be read.
 func parseFareRules(csv *csv.File, fares []FareAttribute, routeIdToRoute map[string]*Route) (keptFares []FareAttribute, rules []FareRule, w []warnings.StaticWarning, ok bool) {
 	fareIDColumn := csv.RequiredColumn("fare_id")
@@ -168,8 +169,8 @@ func parseFareRules(csv *csv.File, fares []FareAttribute, routeIdToRoute map[str
 	}
 
 	fareIdToFare := faresByID(fares)
-	// Fares with a skipped row, and fares with a kept row.
-	skipped, kept := map[string]bool{}, map[string]bool{}
+	// Fares with a skipped row, a skipped contains_id row, and a kept row.
+	skipped, skippedContains, kept := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for csv.NextRow() {
 		fareID := fareIDColumn.Read()
 		routeID := routeIDColumn.Read()
@@ -196,25 +197,40 @@ func parseFareRules(csv *csv.File, fares []FareAttribute, routeIdToRoute map[str
 		}
 		if rule.Fare != nil {
 			skipped[fareID] = true
+			skippedContains[fareID] = skippedContains[fareID] || rule.ContainsZoneId != ""
 		}
 		w = append(w, warnings.NewStaticWarning(csv, warnings.FareRuleInvalid{FareID: fareID, Reason: reason}))
 	}
 
 	keptFares = fares
-	if dropped := func(f FareAttribute) bool { return skipped[f.Id] && !kept[f.Id] }; slices.ContainsFunc(fares, dropped) {
+	dropReason := func(f FareAttribute) string {
+		switch {
+		case skippedContains[f.Id]:
+			return "a fare_rules.txt row with a contains_id for it was skipped"
+		case skipped[f.Id] && !kept[f.Id]:
+			return "every fare_rules.txt row for it was skipped"
+		}
+		return ""
+	}
+	if slices.ContainsFunc(fares, func(f FareAttribute) bool { return dropReason(f) != "" }) {
 		keptFares = nil
 		for _, f := range fares {
-			if dropped(f) {
-				w = append(w, warnings.NewFileWarning(csv.Name(), warnings.FareAttributeInvalid{FareID: f.Id, Reason: "every fare_rules.txt row for it was skipped"}))
+			if reason := dropReason(f); reason != "" {
+				w = append(w, warnings.NewFileWarning(csv.Name(), warnings.FareAttributeInvalid{FareID: f.Id, Reason: reason}))
 				continue
 			}
 			keptFares = append(keptFares, f)
 		}
-		// The rules pointed into the old slice.
+		// The rules pointed into the old slice, and a dropped fare's rules
+		// go with it.
 		fareIdToFare = faresByID(keptFares)
-		for i := range rules {
-			rules[i].Fare = fareIdToFare[rules[i].Fare.Id]
+		keptRules := rules[:0]
+		for _, r := range rules {
+			if r.Fare = fareIdToFare[r.Fare.Id]; r.Fare != nil {
+				keptRules = append(keptRules, r)
+			}
 		}
+		rules = keptRules
 	}
 	return keptFares, rules, w, true
 }

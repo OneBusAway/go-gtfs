@@ -338,6 +338,18 @@ func TestParseFareRules_FareLeftWithoutRules(t *testing.T) {
 			wantWarnings: []warnings.StaticWarningKind{warnings.FareRuleInvalid{FareID: "f", Reason: `unknown route_id "nope"`}},
 		},
 		{
+			// A trip must pass through every contains_id zone, so losing one
+			// would widen the fare.
+			desc:      "skipped contains_id row drops the fare",
+			rules:     []string{"fare_id,route_id,contains_id", "f,,zone1", "f,nope,zone2", "g,route_id,"},
+			wantFares: []string{"g", "h"},
+			wantRules: []string{"fare=g route=route_id origin= destination= contains="},
+			wantWarnings: []warnings.StaticWarningKind{
+				warnings.FareRuleInvalid{FareID: "f", Reason: `unknown route_id "nope"`},
+				warnings.FareAttributeInvalid{FareID: "f", Reason: "a fare_rules.txt row with a contains_id for it was skipped"},
+			},
+		},
+		{
 			desc:         "fare_rules.txt without fare_id drops every fare",
 			rules:        []string{"route_id", "route_id"},
 			wantWarnings: []warnings.StaticWarningKind{warnings.MissingColumns{Columns: []string{"fare_id"}}},
