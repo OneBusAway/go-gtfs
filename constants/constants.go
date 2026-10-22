@@ -6,6 +6,8 @@ const (
 	AgencyFile             StaticFile = "agency.txt"
 	AreasFile              StaticFile = "areas.txt"
 	AttributionsFile       StaticFile = "attributions.txt"
+	FareAttributesFile     StaticFile = "fare_attributes.txt"
+	FareRulesFile          StaticFile = "fare_rules.txt"
 	FeedInfoFile           StaticFile = "feed_info.txt"
 	RoutesFile             StaticFile = "routes.txt"
 	RouteNetworksFile      StaticFile = "route_networks.txt"

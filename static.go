@@ -43,6 +43,11 @@ type Static struct {
 	// Translations is nil when translations.txt is absent. Use NewTranslator
 	// to look them up.
 	Translations []Translation
+	// FareAttributes and FareRules are GTFS-Fares V1. Both are nil if either
+	// file cannot be read as CSV, since a fare with no rules applies to
+	// every trip.
+	FareAttributes []FareAttribute
+	FareRules      []FareRule
 	// Attributions with no Agency, Route or Trip apply to the whole feed.
 	Attributions []Attribution
 
@@ -409,6 +414,13 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 	var routeIdToRoute map[string]*Route
 	// GTFS forbids routes.txt network_id when either network file exists.
 	networkFilesPresent := !isAbsentOrEmpty(fileNameToFile[constants.NetworksFile]) || !isAbsentOrEmpty(fileNameToFile[constants.RouteNetworksFile])
+	// Set when a Fares V1 file cannot be read or lacks a required column, so
+	// that both are dropped.
+	faresV1Unreadable := false
+	dropFaresV1 := func() {
+		faresV1Unreadable = true
+		result.FareAttributes, result.FareRules = nil, nil
+	}
 	timezone := time.UTC
 	for _, table := range []struct {
 		File        constants.StaticFile
@@ -471,6 +483,38 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 			Optional: true,
 			// Each row stands alone, so rows read before the error are kept.
 			Discard: func() {},
+		},
+		{
+			File: constants.FareAttributesFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				var ok bool
+				result.FareAttributes, w, ok = parseFareAttributes(file, result.Agencies)
+				if !ok {
+					dropFaresV1()
+				}
+				return
+			},
+			Optional: true,
+			Discard:  dropFaresV1,
+		},
+		{
+			File: constants.FareRulesFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				// Without usable fares, every rule would only report an
+				// unknown fare_id.
+				if faresV1Unreadable {
+					return
+				}
+				var ok bool
+				result.FareAttributes, result.FareRules, w, ok = parseFareRules(file, result.FareAttributes, routeIdToRoute)
+				if !ok {
+					// With no rules, every fare would apply everywhere.
+					dropFaresV1()
+				}
+				return
+			},
+			Optional: true,
+			Discard:  dropFaresV1,
 		},
 		{
 			File: constants.RouteNetworksFile,
@@ -681,6 +725,9 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 		file, err := openCsvFile(table.File, zipFile)
 		if err != nil {
 			if table.Discard != nil {
+				// Discard can undo state shared with other tables, such as
+				// the Fares V1 pair, so it runs here too.
+				table.Discard()
 				result.Warnings = append(result.Warnings, warnings.NewFileWarning(table.File, warnings.FileUnreadable{Reason: err.Error()}))
 				table.PostProcess()
 				continue
@@ -1769,6 +1816,14 @@ func agenciesByID(agencies []Agency) map[string]*Agency {
 		}
 	}
 	return idToAgency
+}
+
+func faresByID(fares []FareAttribute) map[string]*FareAttribute {
+	idToFare := make(map[string]*FareAttribute, len(fares))
+	for i := range fares {
+		idToFare[fares[i].Id] = &fares[i]
+	}
+	return idToFare
 }
 
 func areasByID(areas []Area) map[string]*Area {
