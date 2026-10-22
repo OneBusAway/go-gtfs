@@ -267,6 +267,24 @@ func (w PathwayInvalidValue) Error() string {
 	return fmt.Sprintf("pathway %q has invalid %s %q; read as unset", w.PathwayID, w.Column, w.Value)
 }
 
+// TranslationInvalid is raised when a translations.txt row is skipped.
+type TranslationInvalid struct {
+	Reason string
+}
+
+func (w TranslationInvalid) Error() string {
+	return fmt.Sprintf("translation is invalid: %s", w.Reason)
+}
+
+// TranslationsWithoutFeedInfo is raised when a feed has translations.txt but
+// no feed_info.txt, which GTFS requires alongside it. The translations are
+// still read.
+type TranslationsWithoutFeedInfo struct{}
+
+func (w TranslationsWithoutFeedInfo) Error() string {
+	return "translations.txt is present but feed_info.txt is missing"
+}
+
 // TransferMissingStop is raised when a transfers.txt row that does not link
 // trips (transfer_type empty or 0 to 3) leaves from_stop_id or to_stop_id
 // empty. GTFS requires both for these types. The row is skipped.

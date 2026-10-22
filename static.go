@@ -38,6 +38,8 @@ type Static struct {
 	// BookingRules is nil when booking_rules.txt is absent.
 	BookingRules []BookingRule
 
+	Translations []Translation
+
 	// FeedInfo is nil when the feed has no feed_info.txt, or when that file
 	// lacks a required column or has no data row that can be read.
 	FeedInfo *FeedInfo
@@ -561,6 +563,21 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 				return
 			},
 			Optional: true,
+		},
+		{
+			File: constants.TranslationsFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				result.Translations, w = parseTranslations(file)
+				// GTFS requires feed_info.txt alongside translations.txt,
+				// since feed_lang says what language the originals are in.
+				if isAbsentOrEmpty(fileNameToFile[constants.FeedInfoFile]) {
+					w = append(w, warnings.NewFileWarning(constants.TranslationsFile, warnings.TranslationsWithoutFeedInfo{}))
+				}
+				return
+			},
+			Optional: true,
+			// Each row stands alone, so rows read before the error are kept.
+			Discard: func() {},
 		},
 		{
 			File: constants.StopTimesFile,
