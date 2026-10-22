@@ -293,10 +293,50 @@ func TestParse(t *testing.T) {
 					{
 						Id:     "a",
 						Parent: &Stop{Id: "b"},
-						Type:   StopType_Platform,
+						Type:   StopType_Stop,
 					},
 					{
 						Id: "b",
+					},
+				},
+			},
+		},
+		{
+			desc: "stop with parent and blank location_type",
+			content: newZipBuilder().add(
+				"stops.txt",
+				"stop_id,location_type,parent_station\na,,b\nb,1,",
+			).build(),
+			expected: &Static{
+				Stops: []Stop{
+					{
+						Id:     "a",
+						Parent: &Stop{Id: "b", Type: StopType_Station},
+						Type:   StopType_Stop,
+					},
+					{
+						Id:   "b",
+						Type: StopType_Station,
+					},
+				},
+			},
+		},
+		{
+			desc: "stop with parent and location_type 0",
+			content: newZipBuilder().add(
+				"stops.txt",
+				"stop_id,location_type,parent_station\na,0,b\nb,1,",
+			).build(),
+			expected: &Static{
+				Stops: []Stop{
+					{
+						Id:     "a",
+						Parent: &Stop{Id: "b", Type: StopType_Station},
+						Type:   StopType_Stop,
+					},
+					{
+						Id:   "b",
+						Type: StopType_Station,
 					},
 				},
 			},
@@ -1835,7 +1875,7 @@ func TestParse(t *testing.T) {
 				Stops: []Stop{
 					{
 						Id:                 "a",
-						Type:               StopType_Platform,
+						Type:               StopType_Stop,
 						Parent:             &Stop{Id: "b", WheelchairBoarding: WheelchairBoarding_Possible, Type: StopType_Station},
 						WheelchairBoarding: WheelchairBoarding_Possible,
 					},
@@ -1862,7 +1902,7 @@ func TestParse(t *testing.T) {
 				Stops: []Stop{
 					{
 						Id:                 "a",
-						Type:               StopType_Platform,
+						Type:               StopType_Stop,
 						Parent:             &Stop{Id: "b", WheelchairBoarding: WheelchairBoarding_NotPossible, Type: StopType_Station},
 						WheelchairBoarding: WheelchairBoarding_NotPossible,
 					},
@@ -1889,7 +1929,7 @@ func TestParse(t *testing.T) {
 				Stops: []Stop{
 					{
 						Id:                 "a",
-						Type:               StopType_Platform,
+						Type:               StopType_Stop,
 						Parent:             &Stop{Id: "b", WheelchairBoarding: WheelchairBoarding_Possible, Type: StopType_Station},
 						WheelchairBoarding: WheelchairBoarding_NotSpecified,
 					},
@@ -1913,7 +1953,7 @@ func TestParse(t *testing.T) {
 				Stops: []Stop{
 					{
 						Id:                 "a",
-						Type:               StopType_Platform,
+						Type:               StopType_Stop,
 						Parent:             &Stop{Id: "b", WheelchairBoarding: WheelchairBoarding_Possible, Type: StopType_Station},
 						WheelchairBoarding: WheelchairBoarding_NotSpecified,
 					},
