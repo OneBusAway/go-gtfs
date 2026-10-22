@@ -29,12 +29,19 @@ func TestReadmeListsSupportedFiles(t *testing.T) {
 	if len(status) == 0 {
 		t.Fatal("found no file rows in README.md")
 	}
+	read := map[string]bool{}
 	for _, file := range staticFileConstants(t) {
+		read[file] = true
 		switch got, ok := status[file]; {
 		case !ok:
 			t.Errorf("README.md has no row for %s, which the parser reads", file)
 		case got != "✅":
 			t.Errorf("README.md marks %s as %s, but the parser reads it", file, got)
+		}
+	}
+	for file, got := range status {
+		if got == "✅" && !read[file] {
+			t.Errorf("README.md marks %s as supported, but constants/constants.go does not declare it", file)
 		}
 	}
 }
