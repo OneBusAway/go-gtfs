@@ -27,6 +27,7 @@ type Static struct {
 	Networks  []Network
 	Stops     []Stop
 	Levels    []Level
+	Areas     []Area
 	Pathways  []Pathway
 	Transfers []Transfer
 	Services  []Service
@@ -509,6 +510,25 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 			// Pathways describe a station's whole access graph, so part of
 			// it would mislead routing.
 			Discard: func() { result.Pathways = nil },
+		},
+		{
+			File: constants.AreasFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				result.Areas, w = parseAreas(file)
+				return
+			},
+			Optional: true,
+			// Each row stands alone, so rows read before the error are kept.
+			Discard: func() {},
+		},
+		{
+			File: constants.StopAreasFile,
+			Action: func(file *csv.File) []warnings.StaticWarning {
+				return parseStopAreas(file, result.Areas, stopIdToStop)
+			},
+			Optional: true,
+			// Each row stands alone, so rows read before the error are kept.
+			Discard: func() {},
 		},
 		{
 			File: constants.LocationGroupsFile,

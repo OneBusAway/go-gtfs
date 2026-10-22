@@ -336,6 +336,27 @@ func (w RouteNetworkInvalid) Error() string {
 	return fmt.Sprintf("route %q in network %q is skipped: %s", w.RouteID, w.NetworkID, w.Reason)
 }
 
+// AreaInvalid is raised when an areas.txt row is skipped.
+type AreaInvalid struct {
+	AreaID string
+	Reason string
+}
+
+func (w AreaInvalid) Error() string {
+	return fmt.Sprintf("area %q is invalid: %s", w.AreaID, w.Reason)
+}
+
+// StopAreaInvalid is raised when a stop_areas.txt row is skipped.
+type StopAreaInvalid struct {
+	AreaID string
+	StopID string
+	Reason string
+}
+
+func (w StopAreaInvalid) Error() string {
+	return fmt.Sprintf("stop %q in area %q is skipped: %s", w.StopID, w.AreaID, w.Reason)
+}
+
 // TransferMissingStop is raised when a transfers.txt row that does not link
 // trips (transfer_type empty or 0 to 3) leaves from_stop_id or to_stop_id
 // empty. GTFS requires both for these types. The row is skipped.
