@@ -84,9 +84,9 @@ func (s *StaticStream) StopTimeCount(tripIndex int) int {
 
 // countStopTimeRows counts each trip's stop times and returns the warnings
 // for the rows it drops, which EachTripStopTimes doesn't report again.
-func (s *StaticStream) countStopTimeRows(file *csv.File, static *Static, stops map[string]*Stop) []warnings.StaticWarning {
+func (s *StaticStream) countStopTimeRows(file *csv.File, static *Static, stopIdToStop map[string]*Stop) []warnings.StaticWarning {
 	s.stopTimeCounts = make([]int, len(static.Trips))
-	s.refs = newStopTimeReferences(static, stops)
+	s.refs = newStopTimeReferences(static, stopIdToStop)
 	reader, missing := newStopTimeReader(file, s.refs)
 	if missing != nil {
 		return missingColumnsWarning(file, missing)

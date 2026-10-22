@@ -379,9 +379,9 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 		shapeIdToShape = map[string]*Shape{}
 	}
 	tripIdToScheduledTrip := map[string]*ScheduledTrip{}
-	// Built once stops.txt and routes.txt are read, and shared by the
-	// parsers that resolve stop and route IDs. stopIdToStop stays nil when
-	// stops.txt is absent.
+	// Each is built right after its file is read and shared by the parsers
+	// that resolve stop or route IDs. stopIdToStop stays nil when stops.txt
+	// is absent.
 	var stopIdToStop map[string]*Stop
 	var routeIdToRoute map[string]*Route
 	timezone := time.UTC
@@ -822,7 +822,7 @@ func parseLocationGroups(csv *csv.File) ([]LocationGroup, []warnings.StaticWarni
 // parseLocationGroupStops appends each row's stop to its group's Stops. A row
 // naming an unknown group is logged and skipped (matching how transfers.txt
 // handles dangling ids); a row naming an unknown stop raises a warning.
-func parseLocationGroupStops(csv *csv.File, groups []LocationGroup, idToStop map[string]*Stop) []warnings.StaticWarning {
+func parseLocationGroupStops(csv *csv.File, groups []LocationGroup, stopIdToStop map[string]*Stop) []warnings.StaticWarning {
 	groupIDColumn := csv.RequiredColumn("location_group_id")
 	stopIDColumn := csv.RequiredColumn("stop_id")
 
@@ -847,7 +847,7 @@ func parseLocationGroupStops(csv *csv.File, groups []LocationGroup, idToStop map
 			log.Printf("Skipping location group stop because location group %q is unknown", groupID)
 			continue
 		}
-		stop := idToStop[stopID]
+		stop := stopIdToStop[stopID]
 		if stop == nil {
 			w = append(w, warnings.NewStaticWarning(csv, warnings.LocationGroupUnknownStop{
 				GroupID: groupID,
@@ -1191,10 +1191,10 @@ type stopTimeReferences struct {
 	bookingRules map[string]*BookingRule
 }
 
-func newStopTimeReferences(static *Static, stops map[string]*Stop) stopTimeReferences {
+func newStopTimeReferences(static *Static, stopIdToStop map[string]*Stop) stopTimeReferences {
 	refs := stopTimeReferences{
 		tripIndexes:  tripIndexByID(static.Trips),
-		stops:        stops,
+		stops:        stopIdToStop,
 		locations:    map[string]*Location{},
 		groups:       map[string]*LocationGroup{},
 		bookingRules: map[string]*BookingRule{},
@@ -1315,8 +1315,8 @@ func parseArrivalDeparture(arrivalRaw, departureRaw string) (arrival, departure 
 	return arrival, departure
 }
 
-func parseScheduledStopTimes(csv *csv.File, static *Static, stops map[string]*Stop) []warnings.StaticWarning {
-	reader, missing := newStopTimeReader(csv, newStopTimeReferences(static, stops))
+func parseScheduledStopTimes(csv *csv.File, static *Static, stopIdToStop map[string]*Stop) []warnings.StaticWarning {
+	reader, missing := newStopTimeReader(csv, newStopTimeReferences(static, stopIdToStop))
 	if missing != nil {
 		return missingColumnsWarning(csv, missing)
 	}
@@ -1506,7 +1506,7 @@ type stopVisit struct {
 // rows without a known stop (including every GTFS-Flex location or location
 // group row) are dropped. stop_id is optional because a feed with only Flex
 // service may leave it out.
-func parseTripStops(csv *csv.File, idToStop map[string]*Stop, trips []ScheduledTrip) {
+func parseTripStops(csv *csv.File, stopIdToStop map[string]*Stop, trips []ScheduledTrip) {
 	stopIDColumn := csv.OptionalColumn("stop_id")
 	stopSequenceColumn := csv.RequiredColumn("stop_sequence")
 	tripIDColumn := csv.RequiredColumn("trip_id")
@@ -1520,7 +1520,7 @@ func parseTripStops(csv *csv.File, idToStop map[string]*Stop, trips []ScheduledT
 		if err != nil {
 			return stopVisit{}, false
 		}
-		stop := idToStop[stopIDColumn.Read()]
+		stop := stopIdToStop[stopIDColumn.Read()]
 		return stopVisit{sequence: stopSequence, stop: stop}, stop != nil
 	})
 	for i, visits := range visitsByTrip {
