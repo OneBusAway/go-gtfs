@@ -379,6 +379,10 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 		shapeIdToShape = map[string]*Shape{}
 	}
 	tripIdToScheduledTrip := map[string]*ScheduledTrip{}
+	// Built once stops.txt and routes.txt are read, and shared by the
+	// parsers that resolve stop and route IDs.
+	var stopIdToStop map[string]*Stop
+	var routeIdToRoute map[string]*Route
 	timezone := time.UTC
 	for _, table := range []struct {
 		File        constants.StaticFile
@@ -407,12 +411,18 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 				result.Routes = parseRoutes(file, result.Agencies)
 				return
 			},
+			PostProcess: func() {
+				routeIdToRoute = routesByID(result.Routes)
+			},
 		},
 		{
 			File: "stops.txt",
 			Action: func(file *csv.File) (w []warnings.StaticWarning) {
 				result.Stops = parseStops(file, opts.InheritWheelchairBoarding)
 				return
+			},
+			PostProcess: func() {
+				stopIdToStop = stopsByID(result.Stops)
 			},
 			// GTFS makes stops.txt optional when locations.geojson defines zones.
 			Optional: locationsPresent,
@@ -483,7 +493,7 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 		{
 			File: "trips.txt",
 			Action: func(file *csv.File) (w []warnings.StaticWarning) {
-				result.Trips = parseScheduledTrips(file, result.Routes, result.Services, shapeIdToShape)
+				result.Trips = parseScheduledTrips(file, routeIdToRoute, result.Services, shapeIdToShape)
 				for idx, trip := range result.Trips {
 					tripIdToScheduledTrip[trip.ID] = &result.Trips[idx]
 				}
@@ -493,7 +503,7 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 		{
 			File: constants.TransfersFile,
 			Action: func(file *csv.File) (w []warnings.StaticWarning) {
-				result.Transfers, w = parseTransfers(file, result.Stops, result.Routes, tripIdToScheduledTrip)
+				result.Transfers, w = parseTransfers(file, stopIdToStop, routeIdToRoute, tripIdToScheduledTrip)
 				return
 			},
 			Optional: true,
@@ -870,7 +880,7 @@ func parseFloat64(s string) *float64 {
 // unless the row links trips (transfer_type 4 or 5), in which case
 // from_trip_id and to_trip_id are required instead and a linked trip's stop
 // may be nil.
-func parseTransfers(csv *csv.File, stops []Stop, routes []Route, tripIdToTrip map[string]*ScheduledTrip) ([]Transfer, []warnings.StaticWarning) {
+func parseTransfers(csv *csv.File, stopIdToStop map[string]*Stop, routeIdToRoute map[string]*Route, tripIdToTrip map[string]*ScheduledTrip) ([]Transfer, []warnings.StaticWarning) {
 	fromStopIDColumn := csv.OptionalColumn("from_stop_id")
 	toStopIDColumn := csv.OptionalColumn("to_stop_id")
 	fromRouteIDColumn := csv.OptionalColumn("from_route_id")
@@ -880,14 +890,6 @@ func parseTransfers(csv *csv.File, stops []Stop, routes []Route, tripIdToTrip ma
 	typeColumn := csv.OptionalColumn("transfer_type")
 	transferTimeColumn := csv.OptionalColumn("min_transfer_time")
 
-	stopIdToStop := map[string]*Stop{}
-	for i := range stops {
-		stopIdToStop[stops[i].Id] = &stops[i]
-	}
-	routeIdToRoute := map[string]*Route{}
-	for i := range routes {
-		routeIdToRoute[routes[i].Id] = &routes[i]
-	}
 	var transfers []Transfer
 	var w []warnings.StaticWarning
 	// resolveStop looks up an optional stop id. ok is false, and a warning is
@@ -1120,7 +1122,7 @@ func parseTime(s string, timezone *time.Location) (time.Time, error) {
 	return time.ParseInLocation("20060102", s, timezone)
 }
 
-func parseScheduledTrips(csv *csv.File, routes []Route, services []Service, shapeIDToShape map[string]*Shape) []ScheduledTrip {
+func parseScheduledTrips(csv *csv.File, idToRoute map[string]*Route, services []Service, shapeIDToShape map[string]*Shape) []ScheduledTrip {
 	routeIDColumn := csv.RequiredColumn("route_id")
 	serviceIDColumn := csv.RequiredColumn("service_id")
 	tripIDColumn := csv.RequiredColumn("trip_id")
@@ -1142,10 +1144,6 @@ func parseScheduledTrips(csv *csv.File, routes []Route, services []Service, shap
 	idToService := map[string]*Service{}
 	for i := range services {
 		idToService[services[i].Id] = &services[i]
-	}
-	idToRoute := map[string]*Route{}
-	for i := range routes {
-		idToRoute[routes[i].Id] = &routes[i]
 	}
 	var trips []ScheduledTrip
 	for csv.NextRow() {
@@ -1545,6 +1543,14 @@ func parseTripStops(csv *csv.File, stops []Stop, trips []ScheduledTrip) {
 		trips[i].Stops = tripStops
 		visitsByTrip[i] = nil
 	}
+}
+
+func routesByID(routes []Route) map[string]*Route {
+	idToRoute := make(map[string]*Route, len(routes))
+	for i := range routes {
+		idToRoute[routes[i].Id] = &routes[i]
+	}
+	return idToRoute
 }
 
 func stopsByID(stops []Stop) map[string]*Stop {
