@@ -118,6 +118,11 @@ func TestParseFareAttributes(t *testing.T) {
 			wantWarnings: []warnings.StaticWarningKind{warnings.FareAttributeInvalid{FareID: "f", Reason: `invalid price "-1"`}},
 		},
 		{
+			desc:         "blank currency_type",
+			attributes:   []string{header, "f,1,  ,0,,a,"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.FareAttributeInvalid{FareID: "f", Reason: "missing values [currency_type]"}},
+		},
+		{
 			desc:         "non-numeric price",
 			attributes:   []string{header, "f,free,USD,0,,a,"},
 			wantWarnings: []warnings.StaticWarningKind{warnings.FareAttributeInvalid{FareID: "f", Reason: `invalid price "free"`}},

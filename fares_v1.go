@@ -94,7 +94,12 @@ func parseFareAttributes(csv *csv.File, agencies []Agency) (fares []FareAttribut
 			invalid("missing values %s", missingKeys)
 			continue
 		}
-		price, ok := parseCurrencyAmount(rawPrice, strings.TrimSpace(currency))
+		currency = strings.TrimSpace(currency)
+		if currency == "" {
+			invalid("missing values [currency_type]")
+			continue
+		}
+		price, ok := parseCurrencyAmount(rawPrice, currency)
 		if !ok || price.Units < 0 {
 			invalid("invalid price %q", rawPrice)
 			continue

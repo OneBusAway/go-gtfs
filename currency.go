@@ -24,7 +24,9 @@ func (a CurrencyAmount) String() string {
 	if a.Units < 0 {
 		sign, digits = "-", digits[1:]
 	}
-	if a.Scale > 0 {
+	if a.Scale < 0 && a.Units != 0 {
+		digits += strings.Repeat("0", -a.Scale)
+	} else if a.Scale > 0 {
 		if pad := a.Scale + 1 - len(digits); pad > 0 {
 			digits = strings.Repeat("0", pad) + digits
 		}
