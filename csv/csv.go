@@ -110,6 +110,11 @@ func (f *File) OptionalColumn(s string) OptionalColumn {
 	return OptionalColumn{i: i, f: f}
 }
 
+// Exists reports whether the column is in the file's header.
+func (c OptionalColumn) Exists() bool {
+	return c.i >= 0
+}
+
 func (c OptionalColumn) Read() string {
 	if c.i < 0 {
 		return ""

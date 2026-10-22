@@ -366,6 +366,28 @@ func TestParseStatic_FlexStopIDColumnAbsent(t *testing.T) {
 	}
 }
 
+func TestParseStatic_NoPlaceColumns(t *testing.T) {
+	// With none of stop_id, location_id and location_group_id, no row can be
+	// placed: one MissingColumns warning, not one warning per row.
+	content := newFlexZipBuilder().add(
+		"stop_times.txt",
+		"trip_id,stop_sequence,arrival_time,departure_time",
+		"trip_id,1,08:00:00,08:00:00",
+		"trip_id,2,08:10:00,08:10:00",
+	).build()
+
+	static, err := ParseStatic(content, ParseStaticOptions{})
+	if err != nil {
+		t.Fatalf("ParseStatic() got error %v, want nil", err)
+	}
+	if len(static.Warnings) != 1 {
+		t.Fatalf("got warnings %+v, want exactly one", static.Warnings)
+	}
+	if diff := cmp.Diff(static.Warnings[0].Kind, warnings.StaticWarningKind(warnings.MissingColumns{Columns: []string{"stop_id"}})); diff != "" {
+		t.Errorf("warning kind mismatch (-got +want):\n%s", diff)
+	}
+}
+
 func TestParseStatic_DraftSafeDurationOnStopTimes(t *testing.T) {
 	content := newFlexZipBuilder().add(
 		"stop_times.txt",

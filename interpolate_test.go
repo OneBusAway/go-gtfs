@@ -327,3 +327,17 @@ func TestInterpolateTimedStopTimes_AllTimedDoesNotAllocate(t *testing.T) {
 		t.Errorf("got %v allocations per call, want 0", allocs)
 	}
 }
+
+func TestInterpolateStopTimesByShapeDist_OutOfRangeDistanceFallsBackToEven(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	st := []ScheduledStopTime{
+		{StopSequence: 1, ArrivalTime: dur("08:00:00"), DepartureTime: dur("08:00:00"), ShapeDistanceTraveled: f(0)},
+		// A distance past the end bound would put this stop after 08:20.
+		{StopSequence: 2, ShapeDistanceTraveled: f(300)},
+		{StopSequence: 3, ArrivalTime: dur("08:20:00"), DepartureTime: dur("08:20:00"), ShapeDistanceTraveled: f(100)},
+	}
+	got := interpolateStopTimesByShapeDist(st)
+	if !almostEq(got[1].ArrivalTime, dur("08:10:00")) || !almostEq(got[1].DepartureTime, dur("08:10:00")) {
+		t.Errorf("got %v/%v, want 08:10:00 (even interpolation)", got[1].ArrivalTime, got[1].DepartureTime)
+	}
+}

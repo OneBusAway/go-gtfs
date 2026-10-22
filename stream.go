@@ -129,6 +129,8 @@ func (s *StaticStream) EachTripStopTimes(fn func(tripIndex int, stopTimes []Sche
 	if missing != nil {
 		return file.Close()
 	}
+	// countStopTimeRows already reported this file's warnings.
+	reader.discardWarnings = true
 
 	groups := newGroupBuffer[int, ScheduledStopTime](func(tripIndex int) int { return s.stopTimeCounts[tripIndex] })
 	var fnErr error

@@ -106,7 +106,8 @@ func interpolateStopTimesByShapeDist(times []ScheduledStopTime) []ScheduledStopT
 }
 
 // gapShapeDistances returns the shape distances of every record in gap, or
-// false when any record has none.
+// false when any record has none or an inner record's distance lies outside
+// the bounding records' (which would put its time outside the gap's).
 func gapShapeDistances(gap []ScheduledStopTime) ([]float64, bool) {
 	dists := make([]float64, len(gap))
 	for i := range gap {
@@ -114,6 +115,12 @@ func gapShapeDistances(gap []ScheduledStopTime) ([]float64, bool) {
 			return nil, false
 		}
 		dists[i] = *gap[i].ShapeDistanceTraveled
+	}
+	first, last := dists[0], dists[len(dists)-1]
+	for _, d := range dists[1 : len(dists)-1] {
+		if d < first || d > last {
+			return nil, false
+		}
 	}
 	return dists, true
 }

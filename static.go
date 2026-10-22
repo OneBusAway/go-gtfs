@@ -1250,7 +1250,7 @@ func parseScheduledStopTimes(csv *csv.File, static *Static) []warnings.StaticWar
 	if missing != nil {
 		return missingColumnsWarning(csv, missing)
 	}
-	stopTimesByTrip := readTripRows(csv, reader.tripIDColumn, static.Trips, reader.refs.tripIndexes, reader.read)
+	stopTimesByTrip := readTripRows(csv, reader.tripIDColumn, len(static.Trips), reader.refs.tripIndexes, reader.read)
 	for i, stopTimes := range stopTimesByTrip {
 		if len(stopTimes) == 0 {
 			continue
@@ -1292,8 +1292,11 @@ type stopTimeReader struct {
 	// interpolated, for the whole feed.
 	hasShapeDistances bool
 	// warnings holds a warning for each row read so far that breaks a
-	// GTFS-Flex rule.
+	// GTFS-Flex rule, unless discardWarnings is set.
 	warnings []warnings.StaticWarning
+	// discardWarnings is set by readers whose warnings were already
+	// reported by an earlier pass over the same file.
+	discardWarnings bool
 }
 
 // newStopTimeReader returns nil and the names of any missing required columns.
@@ -1323,6 +1326,12 @@ func newStopTimeReader(f *csv.File, refs stopTimeReferences) (*stopTimeReader, [
 	}
 	if missing := f.MissingRequiredColumns(); missing != nil {
 		return nil, missing
+	}
+	// Each of the three place columns is optional, but a file with none of
+	// them can't place any row, so report stop_id as missing rather than
+	// warning on every row.
+	if !reader.stopIDColumn.Exists() && !reader.locationIDColumn.Exists() && !reader.locationGroupIDColumn.Exists() {
+		return nil, []string{"stop_id"}
 	}
 	reader.refs = refs
 	reader.headsigns = stringInterner{}
@@ -1400,6 +1409,9 @@ func (r *stopTimeReader) read() (ScheduledStopTime, bool) {
 }
 
 func (r *stopTimeReader) warn(kind warnings.StaticWarningKind) {
+	if r.discardWarnings {
+		return
+	}
 	r.warnings = append(r.warnings, warnings.NewStaticWarning(r.file, kind))
 }
 
@@ -1434,7 +1446,7 @@ func parseTripStops(csv *csv.File, stops []Stop, trips []ScheduledTrip) {
 	}
 
 	idToStop := stopsByID(stops)
-	visitsByTrip := readTripRows(csv, tripIDColumn, trips, tripIndexByID(trips), func() (stopVisit, bool) {
+	visitsByTrip := readTripRows(csv, tripIDColumn, len(trips), tripIndexByID(trips), func() (stopVisit, bool) {
 		stopSequence, err := strconv.Atoi(stopSequenceColumn.Read())
 		if err != nil {
 			return stopVisit{}, false
@@ -1466,15 +1478,15 @@ func stopsByID(stops []Stop) map[string]*Stop {
 	return idToStop
 }
 
-// readTripRows groups the rows eachTripRow accepts by trip, indexed like
-// trips. idToTripIndex must map trip IDs to indexes in trips.
+// readTripRows groups the rows eachTripRow accepts by trip, indexed by trip
+// index. idToTripIndex must map trip IDs to indexes below tripCount.
 //
 // Each trip's rows are buffered while they are contiguous among the accepted
 // rows and then copied into a slice of exactly that size, so the result
 // carries no slack capacity. A trip whose rows resume after another trip's
 // grows by append instead, and is trimmed to size once the file is read.
-func readTripRows[T any](f *csv.File, tripIDColumn csv.RequiredColumn, trips []ScheduledTrip, idToTripIndex map[string]int, readRow func() (T, bool)) [][]T {
-	rowsByTrip := make([][]T, len(trips))
+func readTripRows[T any](f *csv.File, tripIDColumn csv.RequiredColumn, tripCount int, idToTripIndex map[string]int, readRow func() (T, bool)) [][]T {
+	rowsByTrip := make([][]T, tripCount)
 	resumed := map[int]bool{}
 	var pending []T
 	currentTrip := -1
