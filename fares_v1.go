@@ -94,7 +94,7 @@ func parseFareAttributes(csv *csv.File, agencies []Agency) ([]FareAttribute, []w
 			invalid("missing values %s", missingKeys)
 			continue
 		}
-		price, ok := parseCurrencyAmount(rawPrice, currency)
+		price, ok := parseCurrencyAmount(rawPrice, strings.TrimSpace(currency))
 		if !ok || price.Units < 0 {
 			invalid("invalid price %q", rawPrice)
 			continue
@@ -132,7 +132,7 @@ func parseFareAttributes(csv *csv.File, agencies []Agency) ([]FareAttribute, []w
 		if agencyID == "" && len(agencies) > 1 {
 			w = append(w, warnings.NewStaticWarning(csv, warnings.FareAttributeAgencyAmbiguous{FareID: id}))
 		}
-		if raw := transferDurationColumn.Read(); raw != "" {
+		if raw := transferDurationColumn.Read(); strings.TrimSpace(raw) != "" {
 			if d := parseInt32(strings.TrimSpace(raw)); d != nil && *d >= 0 {
 				fare.TransferDuration = d
 			} else {

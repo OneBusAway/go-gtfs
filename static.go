@@ -714,6 +714,9 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 		file, err := openCsvFile(table.File, zipFile)
 		if err != nil {
 			if table.Discard != nil {
+				// Discard can undo state shared with other tables, such as
+				// the Fares V1 pair, so it runs here too.
+				table.Discard()
 				result.Warnings = append(result.Warnings, warnings.NewFileWarning(table.File, warnings.FileUnreadable{Reason: err.Error()}))
 				table.PostProcess()
 				continue

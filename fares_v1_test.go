@@ -238,6 +238,8 @@ func TestParseFaresV1_UnreadableFileDropsBoth(t *testing.T) {
 	}{
 		{"fare_rules.txt", attributes, []string{"fare_id,route_id", "f,route_id", "broken"}},
 		{"fare_attributes.txt", append(attributes, "broken"), []string{"fare_id,route_id", "f,route_id"}},
+		{"fare_rules.txt header", attributes, []string{`"fare_id`}},
+		{"fare_attributes.txt header", []string{`"fare_id`}, []string{"fare_id,route_id", "f,route_id"}},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			static := parseFaresV1Feed(t, nil, tc.attributes, tc.rules)
