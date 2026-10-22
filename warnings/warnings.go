@@ -231,6 +231,42 @@ func (w LevelInvalid) Error() string {
 	return fmt.Sprintf("level %q is invalid: %s", w.LevelID, w.Reason)
 }
 
+// StopAccessInvalid is raised when a stops.txt row sets a stop_access that
+// is not a valid value, or sets one where GTFS forbids it. The stop is kept
+// with no stop_access.
+type StopAccessInvalid struct {
+	StopID string
+	Value  string
+	Reason string
+}
+
+func (w StopAccessInvalid) Error() string {
+	return fmt.Sprintf("stop %q stop_access %q is ignored: %s", w.StopID, w.Value, w.Reason)
+}
+
+// PathwayInvalid is raised when a pathways.txt row is skipped.
+type PathwayInvalid struct {
+	PathwayID string
+	Reason    string
+}
+
+func (w PathwayInvalid) Error() string {
+	return fmt.Sprintf("pathway %q is invalid: %s", w.PathwayID, w.Reason)
+}
+
+// PathwayInvalidValue is raised when an optional pathways.txt value does not
+// parse or is out of the range GTFS gives for it. The pathway is kept and
+// the value is read as unset.
+type PathwayInvalidValue struct {
+	PathwayID string
+	Column    string
+	Value     string
+}
+
+func (w PathwayInvalidValue) Error() string {
+	return fmt.Sprintf("pathway %q has invalid %s %q; read as unset", w.PathwayID, w.Column, w.Value)
+}
+
 // TransferMissingStop is raised when a transfers.txt row that does not link
 // trips (transfer_type empty or 0 to 3) leaves from_stop_id or to_stop_id
 // empty. GTFS requires both for these types. The row is skipped.
