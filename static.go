@@ -53,6 +53,11 @@ type Static struct {
 	RiderCategories []RiderCategory
 	FareMedia       []FareMedia
 	FareProducts    []FareProduct
+	// Timeframes and FareLegRules are dropped entirely if their file cannot
+	// be read as CSV: an unset field in a leg rule matches what the other
+	// rules leave out, so a partial set would change what the rest match.
+	Timeframes   []Timeframe
+	FareLegRules []FareLegRule
 	// Attributions with no Agency, Route or Trip apply to the whole feed.
 	Attributions []Attribution
 
@@ -645,6 +650,24 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 				}
 			},
 			Optional: true,
+		},
+		{
+			File: constants.TimeframesFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				result.Timeframes, w = parseTimeframes(file, servicesByID(result.Services))
+				return
+			},
+			Optional: true,
+			Discard:  func() { result.Timeframes = nil },
+		},
+		{
+			File: constants.FareLegRulesFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				result.FareLegRules, w = parseFareLegRules(file, result.Networks, result.Areas, result.Timeframes, result.FareProducts)
+				return
+			},
+			Optional: true,
+			Discard:  func() { result.FareLegRules = nil },
 		},
 		{
 			File: "shapes.txt",
@@ -1857,6 +1880,14 @@ func faresByID(fares []FareAttribute) map[string]*FareAttribute {
 		idToFare[fares[i].Id] = &fares[i]
 	}
 	return idToFare
+}
+
+func servicesByID(services []Service) map[string]*Service {
+	idToService := make(map[string]*Service, len(services))
+	for i := range services {
+		idToService[services[i].Id] = &services[i]
+	}
+	return idToService
 }
 
 func riderCategoriesByID(categories []RiderCategory) map[string]*RiderCategory {

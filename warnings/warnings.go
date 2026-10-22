@@ -442,6 +442,28 @@ func (w FareProductDefaultCategory) Error() string {
 	return fmt.Sprintf("fare product %q has %d default rider categories among its eligible ones; want exactly 1", w.FareProductID, w.Defaults)
 }
 
+// TimeframeInvalid is raised when a timeframes.txt row is skipped.
+type TimeframeInvalid struct {
+	TimeframeGroupID string
+	Reason           string
+}
+
+func (w TimeframeInvalid) Error() string {
+	return fmt.Sprintf("timeframe in group %q is invalid: %s", w.TimeframeGroupID, w.Reason)
+}
+
+// FareLegRuleInvalid is raised when a fare_leg_rules.txt row is skipped.
+// Since an unset field in a leg rule matches what the other rules leave out,
+// a skipped rule can change what the remaining rules match.
+type FareLegRuleInvalid struct {
+	LegGroupID string
+	Reason     string
+}
+
+func (w FareLegRuleInvalid) Error() string {
+	return fmt.Sprintf("fare leg rule in group %q is invalid: %s", w.LegGroupID, w.Reason)
+}
+
 // TransferMissingStop is raised when a transfers.txt row that does not link
 // trips (transfer_type empty or 0 to 3) leaves from_stop_id or to_stop_id
 // empty. GTFS requires both for these types. The row is skipped.
