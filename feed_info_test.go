@@ -163,17 +163,25 @@ func TestParseFeedInfo_ExtraRowWarningPointsAtRow(t *testing.T) {
 }
 
 // A feed_info.txt that cannot be read must not take down the rest of the
-// feed: it is ignored with a warning, as it was before the file was read.
+// feed, which parsed before the file was read. A first row read before the
+// error is kept, since only that row is used.
 func TestParseFeedInfo_UnreadableFileIsIgnored(t *testing.T) {
 	for _, tc := range []struct {
 		desc   string
 		lines  []string
+		want   *FeedInfo
 		reason string
 	}{
 		{
 			desc:   "row with too few fields",
 			lines:  []string{"feed_publisher_name,feed_publisher_url,feed_lang,feed_version", "Metro,https://example.com,en"},
 			reason: "record on line 2: wrong number of fields",
+		},
+		{
+			desc:   "bad row after the first",
+			lines:  []string{"feed_publisher_name,feed_publisher_url,feed_lang", "Metro,https://example.com,en", "Extra,Row"},
+			want:   &FeedInfo{PublisherName: "Metro", PublisherUrl: "https://example.com", Language: "en"},
+			reason: "record on line 3: wrong number of fields",
 		},
 		{
 			desc:   "only a newline",
@@ -183,8 +191,8 @@ func TestParseFeedInfo_UnreadableFileIsIgnored(t *testing.T) {
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			static := parseFeedInfoFeed(t, tc.lines...)
-			if static.FeedInfo != nil {
-				t.Errorf("FeedInfo = %+v, want nil", static.FeedInfo)
+			if diff := cmp.Diff(static.FeedInfo, tc.want); diff != "" {
+				t.Errorf("FeedInfo mismatch (-got +want):\n%s", diff)
 			}
 			if len(static.Trips) != 1 {
 				t.Errorf("got %d trips, want the feed's 1 trip", len(static.Trips))

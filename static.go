@@ -36,7 +36,7 @@ type Static struct {
 	BookingRules []BookingRule
 
 	// FeedInfo is nil when the feed has no feed_info.txt, or when that file
-	// lacks a required column, has no data row, or cannot be read as CSV.
+	// lacks a required column or has no data row that can be read.
 	FeedInfo *FeedInfo
 
 	// Warnings raised during GTFS static parsing.
@@ -396,9 +396,10 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 		Optional    bool
 		Skip        bool
 		// Discard, when set, makes an unreadable file a warning rather than
-		// an error. It must undo what Action stored, so the feed parses as
-		// if the file were absent. Use it for files that only add to the
-		// feed, whose problems should not stop the rest from parsing.
+		// an error. It runs when reading stops at a malformed row, and must
+		// undo whatever Action stored that the missing rows make unreliable.
+		// Use it for files that only add to the feed, whose problems should
+		// not stop the rest from parsing.
 		Discard func()
 	}{
 		{
@@ -422,7 +423,9 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 				return
 			},
 			Optional: true,
-			Discard:  func() { result.FeedInfo = nil },
+			// Only the first row is used, and any row read before the
+			// error parsed cleanly, so there is nothing to undo.
+			Discard: func() {},
 		},
 		{
 			File: "routes.txt",
@@ -575,7 +578,7 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 				return nil, fmt.Errorf("failed to read %q: %w", table.File, err)
 			}
 			table.Discard()
-			w = []warnings.StaticWarning{warnings.NewFileWarning(table.File, warnings.FileUnreadable{Reason: err.Error()})}
+			w = append(w, warnings.NewFileWarning(table.File, warnings.FileUnreadable{Reason: err.Error()}))
 		}
 		table.PostProcess()
 		result.Warnings = append(result.Warnings, w...)
