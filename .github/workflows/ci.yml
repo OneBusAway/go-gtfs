@@ -92,3 +92,30 @@ jobs:
           repo-checkout: false
           go-version-input: stable
           go-package: ./...
+
+  generated:
+    name: Generated code
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      # buf drives protoc-gen-go, which go.mod pins as a tool.
+      - name: Install buf
+        run: go install github.com/bufbuild/buf/cmd/buf@v1.73.0
+
+      - name: Check proto/*.pb.go match the .proto sources
+        run: |
+          buf generate
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            git --no-pager diff --stat
+            echo "::error::Generated code is out of date. Run 'buf generate' and commit the result."
+            exit 1
+          fi

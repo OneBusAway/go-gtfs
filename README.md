@@ -187,3 +187,16 @@ The rough breakdown is:
 ### Realtime parser
 
 TBD
+
+## Regenerating the protobuf code
+
+The `proto` subpackage is generated from the `.proto` files next to it. After editing a
+`.proto` file, install [buf](https://buf.build/docs/cli/installation/) and run:
+
+```sh
+buf generate
+```
+
+`buf.gen.yaml` runs `protoc-gen-go` through `go tool`, and `go.mod` pins its version, so the
+output matches the `google.golang.org/protobuf` version the library uses. CI regenerates the
+code and fails if it differs from what is committed.
