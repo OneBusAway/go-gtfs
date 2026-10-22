@@ -37,6 +37,8 @@ func TestFlexWarningKindsHaveMessages(t *testing.T) {
 		{TranslationInvalid{Reason: "r"}, "translation is invalid: r"},
 		{AttributionInvalid{AttributionID: "a", Reason: "r"}, `attribution "a" is invalid: r`},
 		{NetworksDefinedTwice{}, "routes.txt network_id is ignored because networks.txt or route_networks.txt is present"},
+		{AreaInvalid{AreaID: "a", Reason: "r"}, `area "a" is invalid: r`},
+		{StopAreaInvalid{AreaID: "a", StopID: "s", Reason: "r"}, `stop "s" in area "a" is skipped: r`},
 		{NetworkInvalid{NetworkID: "n", Reason: "r"}, `network "n" is invalid: r`},
 		{RouteNetworkInvalid{RouteID: "r", NetworkID: "n", Reason: "x"}, `route "r" in network "n" is skipped: x`},
 		{AttributionWithoutRole{AttributionID: "a"}, `attribution "a" has no role; set is_producer, is_operator or is_authority`},

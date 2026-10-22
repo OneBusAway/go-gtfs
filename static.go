@@ -27,6 +27,7 @@ type Static struct {
 	Networks  []Network
 	Stops     []Stop
 	Levels    []Level
+	Areas     []Area
 	Pathways  []Pathway
 	Transfers []Transfer
 	Services  []Service
@@ -101,6 +102,9 @@ type Stop struct {
 	// Level is nil when stops.txt gives no level_id or names an unknown one.
 	Level  *Level
 	Access StopAccess
+	// Areas are the areas stop_areas.txt lists the stop in. A platform not
+	// listed in any is also in its station's areas; see Area.Contains.
+	Areas []*Area
 }
 
 // Root returns the root stop.
@@ -509,6 +513,25 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 			// Pathways describe a station's whole access graph, so part of
 			// it would mislead routing.
 			Discard: func() { result.Pathways = nil },
+		},
+		{
+			File: constants.AreasFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				result.Areas, w = parseAreas(file)
+				return
+			},
+			Optional: true,
+			// Each row stands alone, so rows read before the error are kept.
+			Discard: func() {},
+		},
+		{
+			File: constants.StopAreasFile,
+			Action: func(file *csv.File) []warnings.StaticWarning {
+				return parseStopAreas(file, result.Areas, stopIdToStop)
+			},
+			Optional: true,
+			// Each row stands alone, so rows read before the error are kept.
+			Discard: func() {},
 		},
 		{
 			File: constants.LocationGroupsFile,
@@ -1746,6 +1769,14 @@ func agenciesByID(agencies []Agency) map[string]*Agency {
 		}
 	}
 	return idToAgency
+}
+
+func areasByID(areas []Area) map[string]*Area {
+	idToArea := make(map[string]*Area, len(areas))
+	for i := range areas {
+		idToArea[areas[i].Id] = &areas[i]
+	}
+	return idToArea
 }
 
 func networksByID(networks []Network) map[string]*Network {
