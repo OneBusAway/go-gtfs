@@ -35,6 +35,9 @@ type Static struct {
 	// BookingRules is nil when booking_rules.txt is absent.
 	BookingRules []BookingRule
 
+	// FeedInfo is nil when the feed has no feed_info.txt.
+	FeedInfo *FeedInfo
+
 	// Warnings raised during GTFS static parsing.
 	Warnings []warnings.StaticWarning
 }
@@ -405,6 +408,14 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 				}
 				return
 			},
+		},
+		{
+			File: constants.FeedInfoFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				result.FeedInfo, w = parseFeedInfo(file, timezone)
+				return
+			},
+			Optional: true,
 		},
 		{
 			File: "routes.txt",
