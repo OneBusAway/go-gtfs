@@ -928,8 +928,6 @@ func parseTransfers(csv *csv.File, stopIdToStop map[string]*Stop, routeIdToRoute
 		rawType := typeColumn.Read()
 		transferType, ok := parseTransferType(rawType)
 		if !ok {
-			// Guessing the type could change what the rule means, for
-			// example by turning a linked-trip row into a stop transfer.
 			w = append(w, warnings.NewStaticWarning(csv, warnings.TransferInvalidType{Value: rawType}))
 			continue
 		}
