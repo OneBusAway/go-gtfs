@@ -152,6 +152,26 @@ func TestParseTransfers(t *testing.T) {
 			wantWarnings: []warnings.StaticWarningKind{warnings.TransferUnknownReference{Column: "to_trip_id", ID: "UNKNOWN"}},
 		},
 		{
+			desc:        "timed transfer between routes at one stop",
+			transfers:   []string{header, "S1,S1,R1,R2,,,1,"},
+			wantSummary: []string{"from=S1 to=S1 fromRoute=R1 toRoute=R2 fromTrip= toTrip= type=TIMED min=<nil>"},
+		},
+		{
+			desc:        "minimum time transfer at one stop",
+			transfers:   []string{header, "S1,S1,,,,,2,180"},
+			wantSummary: []string{"from=S1 to=S1 fromRoute= toRoute= fromTrip= toTrip= type=REQUIRES_TIME min=180"},
+		},
+		{
+			desc:        "minimum time transfer within one station",
+			transfers:   []string{header, "ST,ST,,,,,2,300"},
+			wantSummary: []string{"from=ST to=ST fromRoute= toRoute= fromTrip= toTrip= type=REQUIRES_TIME min=300"},
+		},
+		{
+			desc:        "transfer not possible between trips at one stop",
+			transfers:   []string{header, "S1,S1,,,T1,T2,3,"},
+			wantSummary: []string{"from=S1 to=S1 fromRoute= toRoute= fromTrip=T1 toTrip=T2 type=NOT_POSSIBLE min=<nil>"},
+		},
+		{
 			desc:      "minimum time transfer without from_stop_id is skipped",
 			transfers: []string{header, ",S2,,,,,2,180"},
 		},

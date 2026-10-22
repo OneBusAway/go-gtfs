@@ -129,6 +129,7 @@ earlier versions should note:
   `Transfer.To` may be nil. Check them before use.
 - A linked-trip row without a known `from_trip_id` and `to_trip_id` is skipped with a
   `TransferMissingTrip` or `TransferUnknownReference` warning.
+- A row whose `from_stop_id` equals its `to_stop_id` is kept. Earlier versions dropped it.
 
 ## Performance
 

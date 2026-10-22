@@ -376,6 +376,13 @@ func TestParse(t *testing.T) {
 			).build(),
 			expected: &Static{
 				Stops: []Stop{{Id: "a"}},
+				Transfers: []Transfer{
+					{
+						From: &Stop{Id: "a"},
+						To:   &Stop{Id: "a"},
+						Type: TransferType_Recommended,
+					},
+				},
 			},
 		},
 		{

@@ -943,10 +943,6 @@ func parseTransfers(csv *csv.File, stops []Stop, routes []Route, trips []Schedul
 				continue
 			}
 		}
-		if fromStop != nil && toStop != nil && fromStop.Id == toStop.Id {
-			// log.Printf("Skipping transfer between the same stop %q", fromStop.Id)
-			continue
-		}
 		transfers = append(transfers, Transfer{
 			From:            fromStop,
 			To:              toStop,
