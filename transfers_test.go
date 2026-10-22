@@ -207,6 +207,26 @@ func TestParseTransfers(t *testing.T) {
 			wantWarnings: []warnings.StaticWarningKind{warnings.TransferStopNotAllowed{Column: "to_stop_id", StopID: "ST"}},
 		},
 		{
+			desc:         "transfer whose from_trip_id is not on from_route_id",
+			transfers:    []string{header, "S1,S2,R2,,T1,,1,"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferTripNotOnRoute{TripColumn: "from_trip_id", TripID: "T1", RouteID: "R2"}},
+		},
+		{
+			desc:         "transfer whose to_trip_id is not on to_route_id",
+			transfers:    []string{header, "S1,S2,,R1,,T2,1,"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferTripNotOnRoute{TripColumn: "to_trip_id", TripID: "T2", RouteID: "R1"}},
+		},
+		{
+			desc:         "in-seat transfer whose trip is not on its route",
+			transfers:    []string{header, ",,R1,R1,T1,T2,4,"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferTripNotOnRoute{TripColumn: "to_trip_id", TripID: "T2", RouteID: "R1"}},
+		},
+		{
+			desc:        "trip on a route in only the from direction",
+			transfers:   []string{header, "S1,S2,R1,,T1,T2,2,60"},
+			wantSummary: []string{"from=S1 to=S2 fromRoute=R1 toRoute= fromTrip=T1 toTrip=T2 type=REQUIRES_TIME min=60"},
+		},
+		{
 			desc:      "minimum time transfer without from_stop_id is skipped",
 			transfers: []string{header, ",S2,,,,,2,180"},
 		},

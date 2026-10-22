@@ -131,6 +131,8 @@ earlier versions should note:
   `TransferMissingTrip` or `TransferUnknownReference` warning.
 - A linked-trip row whose `from_stop_id` or `to_stop_id` is not a stop (`location_type` 0),
   such as a station, is skipped with a `TransferStopNotAllowed` warning.
+- A row that sets both a trip and a route on the same side (`from_` or `to_`) is skipped with a
+  `TransferTripNotOnRoute` warning when the trip runs on a different route.
 - A row whose `from_stop_id` equals its `to_stop_id` is kept. Earlier versions dropped it.
 - A row whose `from_route_id`, `to_route_id`, `from_trip_id` or `to_trip_id` is not empty
   and not defined in `routes.txt` or `trips.txt` is skipped with a `TransferUnknownReference`

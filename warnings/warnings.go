@@ -180,3 +180,16 @@ type TransferStopNotAllowed struct {
 func (w TransferStopNotAllowed) Error() string {
 	return fmt.Sprintf("linked-trip transfer %s %q is not a stop (location_type 0)", w.Column, w.StopID)
 }
+
+// TransferTripNotOnRoute is raised when a transfers.txt row sets a trip and a
+// route on the same side (from_ or to_) but the trip runs on a different
+// route. GTFS requires the trip to belong to the route. The row is skipped.
+type TransferTripNotOnRoute struct {
+	TripColumn string
+	TripID     string
+	RouteID    string
+}
+
+func (w TransferTripNotOnRoute) Error() string {
+	return fmt.Sprintf("transfer %s %q does not run on route %q", w.TripColumn, w.TripID, w.RouteID)
+}

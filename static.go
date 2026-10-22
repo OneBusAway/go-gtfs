@@ -941,6 +941,26 @@ func parseTransfers(csv *csv.File, stops []Stop, routes []Route, tripIdToTrip ma
 		if len(w) > warningsBefore {
 			continue
 		}
+		// GTFS requires a trip to belong to the route given beside it.
+		for _, side := range []struct {
+			tripColumn string
+			trip       *ScheduledTrip
+			route      *Route
+		}{
+			{"from_trip_id", fromTrip, fromRoute},
+			{"to_trip_id", toTrip, toRoute},
+		} {
+			if side.trip != nil && side.route != nil && side.trip.Route.Id != side.route.Id {
+				w = append(w, warnings.NewStaticWarning(csv, warnings.TransferTripNotOnRoute{
+					TripColumn: side.tripColumn,
+					TripID:     side.trip.ID,
+					RouteID:    side.route.Id,
+				}))
+			}
+		}
+		if len(w) > warningsBefore {
+			continue
+		}
 
 		if !linkedTrips && (fromStopID == "" || toStopID == "") {
 			log.Printf("Skipping transfer because from_stop_id %q or to_stop_id %q is empty", fromStopID, toStopID)
