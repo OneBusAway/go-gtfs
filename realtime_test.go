@@ -57,7 +57,7 @@ func TestRealtime(t *testing.T) {
 								StopId:       ptr(stopID1),
 								StopSequence: ptr(uint32(1)),
 								Arrival: &gtfsrt.TripUpdate_StopTimeEvent{
-									Time: ptr(int64(time1.Unix())),
+									Time: ptr(time1.Unix()),
 								},
 							},
 							{
@@ -65,7 +65,7 @@ func TestRealtime(t *testing.T) {
 								StopSequence:         ptr(uint32(2)),
 								ScheduleRelationship: ptr(gtfsrt.TripUpdate_StopTimeUpdate_SKIPPED),
 								Arrival: &gtfsrt.TripUpdate_StopTimeEvent{
-									Time: ptr(int64(time2.Unix())),
+									Time: ptr(time2.Unix()),
 								},
 							},
 							{
@@ -165,7 +165,7 @@ func TestRealtime(t *testing.T) {
 								StopId:       ptr(stopID1),
 								StopSequence: ptr(uint32(1)),
 								Arrival: &gtfsrt.TripUpdate_StopTimeEvent{
-									Time: ptr(int64(time1.Unix())),
+									Time: ptr(time1.Unix()),
 								},
 							},
 						},

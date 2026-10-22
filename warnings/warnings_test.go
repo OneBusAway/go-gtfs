@@ -8,10 +8,7 @@ import (
 )
 
 // Verify that StaticWarningKind satisfies the error interface.
-var (
-	w StaticWarningKind = nil
-	e error             = w
-)
+var _ error = StaticWarningKind(nil)
 
 func TestFlexWarningKindsHaveMessages(t *testing.T) {
 	for _, tc := range []struct {

@@ -4,10 +4,10 @@ go 1.18
 
 require (
 	github.com/fatih/color v1.13.0
+	github.com/google/go-cmp v0.5.9
 	github.com/urfave/cli/v2 v2.3.0
 	golang.org/x/text v0.9.0
 	google.golang.org/protobuf v1.27.1
-	github.com/google/go-cmp v0.5.9
 )
 
 require (
