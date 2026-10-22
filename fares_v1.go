@@ -100,22 +100,19 @@ func parseFareAttributes(csv *csv.File, agencies []Agency) ([]FareAttribute, []w
 			continue
 		}
 		fare := FareAttribute{Id: id, Price: price}
-		switch strings.TrimSpace(rawPaymentMethod) {
-		case "0":
-			fare.PaymentMethod = PaymentMethod_OnBoard
-		case "1":
-			fare.PaymentMethod = PaymentMethod_BeforeBoarding
-		default:
+		paymentMethod := parseInt32(strings.TrimSpace(rawPaymentMethod))
+		if paymentMethod == nil || *paymentMethod < 0 || *paymentMethod > 1 {
 			invalid("invalid payment_method %q", rawPaymentMethod)
 			continue
 		}
-		switch rawTransfers := transfersColumn.Read(); strings.TrimSpace(rawTransfers) {
-		case "":
-		case "0", "1", "2":
+		fare.PaymentMethod = PaymentMethod(*paymentMethod)
+		// Empty means unlimited, which Transfers leaves nil.
+		if rawTransfers := transfersColumn.Read(); strings.TrimSpace(rawTransfers) != "" {
 			fare.Transfers = parseInt32(strings.TrimSpace(rawTransfers))
-		default:
-			invalid("invalid transfers %q", rawTransfers)
-			continue
+			if fare.Transfers == nil || *fare.Transfers < 0 || *fare.Transfers > 2 {
+				invalid("invalid transfers %q", rawTransfers)
+				continue
+			}
 		}
 		agencyID := agencyIDColumn.Read()
 		switch {
@@ -160,10 +157,7 @@ func parseFareRules(csv *csv.File, fares []FareAttribute, routeIdToRoute map[str
 		return nil, w
 	}
 
-	fareIdToFare := make(map[string]*FareAttribute, len(fares))
-	for i := range fares {
-		fareIdToFare[fares[i].Id] = &fares[i]
-	}
+	fareIdToFare := faresByID(fares)
 	var rules []FareRule
 	var w []warnings.StaticWarning
 	for csv.NextRow() {

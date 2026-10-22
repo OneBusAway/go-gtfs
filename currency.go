@@ -1,6 +1,7 @@
 package gtfs
 
 import (
+	"math"
 	"strconv"
 	"strings"
 )
@@ -11,7 +12,7 @@ import (
 // Scale 1, and never rounds the way a float64 would.
 type CurrencyAmount struct {
 	Units    int64
-	Scale    int32
+	Scale    int
 	Currency string
 }
 
@@ -24,10 +25,10 @@ func (a CurrencyAmount) String() string {
 		sign, digits = "-", digits[1:]
 	}
 	if a.Scale > 0 {
-		if pad := int(a.Scale) + 1 - len(digits); pad > 0 {
+		if pad := a.Scale + 1 - len(digits); pad > 0 {
 			digits = strings.Repeat("0", pad) + digits
 		}
-		digits = digits[:len(digits)-int(a.Scale)] + "." + digits[len(digits)-int(a.Scale):]
+		digits = digits[:len(digits)-a.Scale] + "." + digits[len(digits)-a.Scale:]
 	}
 	if a.Currency == "" {
 		return sign + digits
@@ -38,11 +39,7 @@ func (a CurrencyAmount) String() string {
 // Float64 returns the amount as a float64, for display or approximate
 // arithmetic. Use Units and Scale when exactness matters.
 func (a CurrencyAmount) Float64() float64 {
-	f := float64(a.Units)
-	for i := int32(0); i < a.Scale; i++ {
-		f /= 10
-	}
-	return f
+	return float64(a.Units) / math.Pow10(a.Scale)
 }
 
 // parseCurrencyAmount reads a decimal such as "2.75" or "-1.5", ignoring
@@ -62,7 +59,7 @@ func parseCurrencyAmount(s, currency string) (a CurrencyAmount, ok bool) {
 	if negative {
 		units = -units
 	}
-	return CurrencyAmount{Units: units, Scale: int32(len(fraction)), Currency: currency}, true
+	return CurrencyAmount{Units: units, Scale: len(fraction), Currency: currency}, true
 }
 
 // allDigits reports whether s is one or more ASCII digits.

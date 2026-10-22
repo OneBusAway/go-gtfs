@@ -413,13 +413,13 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 	var stopIdToStop map[string]*Stop
 	var routeIdToRoute map[string]*Route
 	// GTFS forbids routes.txt network_id when either network file exists.
+	networkFilesPresent := !isAbsentOrEmpty(fileNameToFile[constants.NetworksFile]) || !isAbsentOrEmpty(fileNameToFile[constants.RouteNetworksFile])
 	// Set when a Fares V1 file cannot be read, so that both are dropped.
 	faresV1Unreadable := false
 	dropFaresV1 := func() {
 		faresV1Unreadable = true
 		result.FareAttributes, result.FareRules = nil, nil
 	}
-	networkFilesPresent := !isAbsentOrEmpty(fileNameToFile[constants.NetworksFile]) || !isAbsentOrEmpty(fileNameToFile[constants.RouteNetworksFile])
 	timezone := time.UTC
 	for _, table := range []struct {
 		File        constants.StaticFile
@@ -1802,6 +1802,14 @@ func agenciesByID(agencies []Agency) map[string]*Agency {
 		}
 	}
 	return idToAgency
+}
+
+func faresByID(fares []FareAttribute) map[string]*FareAttribute {
+	idToFare := make(map[string]*FareAttribute, len(fares))
+	for i := range fares {
+		idToFare[fares[i].Id] = &fares[i]
+	}
+	return idToFare
 }
 
 func areasByID(areas []Area) map[string]*Area {
