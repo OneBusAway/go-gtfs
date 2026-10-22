@@ -138,6 +138,8 @@ earlier versions should note:
   and not defined in `routes.txt` or `trips.txt` is skipped with a `TransferUnknownReference`
   warning. Earlier versions kept the row with a nil route or trip, which made the rule apply
   to every route or trip at the stop.
+- A row whose `from_stop_id` or `to_stop_id` is not defined in `stops.txt` is skipped with a
+  `TransferUnknownReference` warning. Earlier versions skipped it with only a log line.
 
 ## Performance
 

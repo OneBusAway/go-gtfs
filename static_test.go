@@ -396,6 +396,15 @@ func TestParse(t *testing.T) {
 			).build(),
 			expected: &Static{
 				Stops: []Stop{{Id: "a"}},
+				Warnings: []warnings.StaticWarning{
+					{
+						Kind:          warnings.TransferUnknownReference{Column: "to_stop_id", ID: "b"},
+						File:          constants.TransfersFile,
+						RowNumber:     1,
+						RowContent:    []string{"a", "b"},
+						HeaderContent: []string{"from_stop_id", "to_stop_id"},
+					},
+				},
 			},
 		},
 		{
@@ -409,6 +418,15 @@ func TestParse(t *testing.T) {
 			).build(),
 			expected: &Static{
 				Stops: []Stop{{Id: "b"}},
+				Warnings: []warnings.StaticWarning{
+					{
+						Kind:          warnings.TransferUnknownReference{Column: "from_stop_id", ID: "a"},
+						File:          constants.TransfersFile,
+						RowNumber:     1,
+						RowContent:    []string{"a", "b"},
+						HeaderContent: []string{"from_stop_id", "to_stop_id"},
+					},
+				},
 			},
 		},
 		{

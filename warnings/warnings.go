@@ -157,9 +157,11 @@ func (w TransferMissingTrip) Error() string {
 	return fmt.Sprintf("linked-trip transfer is missing %s", w.Column)
 }
 
-// TransferUnknownReference is raised when a transfers.txt row names a route
-// or trip that routes.txt or trips.txt does not define. The row is skipped,
-// because reading the ID as unset would make the rule apply more widely.
+// TransferUnknownReference is raised when a transfers.txt row names a stop,
+// route or trip that is not in the parsed feed: either stops.txt, routes.txt
+// or trips.txt does not define it, or its row there was skipped. The
+// transfer row is skipped too. Reading an unknown route or trip ID as unset
+// would make the rule apply more widely than the feed says.
 type TransferUnknownReference struct {
 	Column string
 	ID     string

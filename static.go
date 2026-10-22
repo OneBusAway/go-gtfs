@@ -885,22 +885,21 @@ func parseTransfers(csv *csv.File, stops []Stop, routes []Route, tripIdToTrip ma
 	for i := range routes {
 		routeIdToRoute[routes[i].Id] = &routes[i]
 	}
-	// resolveStop looks up an optional stop id. ok is false if the id is
-	// given but unknown.
+	var transfers []Transfer
+	var w []warnings.StaticWarning
+	// resolveStop looks up an optional stop id. ok is false, and a warning is
+	// added, if the id is given but unknown.
 	resolveStop := func(column, id string) (stop *Stop, ok bool) {
 		if id == "" {
 			return nil, true
 		}
 		stop = stopIdToStop[id]
 		if stop == nil {
-			log.Printf("Skipping transfer because %s %q is invalid", column, id)
+			w = append(w, warnings.NewStaticWarning(csv, warnings.TransferUnknownReference{Column: column, ID: id}))
 			return nil, false
 		}
 		return stop, true
 	}
-
-	var transfers []Transfer
-	var w []warnings.StaticWarning
 	// checkTripOnRoute warns if a trip and a route are both given on one side
 	// of the transfer but the trip runs on another route. GTFS requires the
 	// trip to belong to the route.

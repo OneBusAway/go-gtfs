@@ -227,6 +227,16 @@ func TestParseTransfers(t *testing.T) {
 			wantSummary: []string{"from=S1 to=S2 fromRoute=R1 toRoute= fromTrip=T1 toTrip=T2 type=REQUIRES_TIME min=60"},
 		},
 		{
+			desc:         "transfer with unknown from_stop_id",
+			transfers:    []string{header, "NOPE,S2,,,,,2,180"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferUnknownReference{Column: "from_stop_id", ID: "NOPE"}},
+		},
+		{
+			desc:         "in-seat transfer with unknown to_stop_id",
+			transfers:    []string{header, "S1,NOPE,,,T1,T2,4,"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferUnknownReference{Column: "to_stop_id", ID: "NOPE"}},
+		},
+		{
 			desc:      "minimum time transfer without from_stop_id is skipped",
 			transfers: []string{header, ",S2,,,,,2,180"},
 		},
