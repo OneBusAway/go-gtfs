@@ -285,6 +285,16 @@ func (w TranslationsWithoutFeedInfo) Error() string {
 	return "translations.txt is present but feed_info.txt is missing or unusable"
 }
 
+// AttributionInvalid is raised when an attributions.txt row is skipped.
+type AttributionInvalid struct {
+	AttributionID string
+	Reason        string
+}
+
+func (w AttributionInvalid) Error() string {
+	return fmt.Sprintf("attribution %q is invalid: %s", w.AttributionID, w.Reason)
+}
+
 // TransferMissingStop is raised when a transfers.txt row that does not link
 // trips (transfer_type empty or 0 to 3) leaves from_stop_id or to_stop_id
 // empty. GTFS requires both for these types. The row is skipped.

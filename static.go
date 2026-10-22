@@ -40,6 +40,7 @@ type Static struct {
 	// Translations is nil when translations.txt is absent. Use NewTranslator
 	// to look them up.
 	Translations []Translation
+	Attributions []Attribution
 
 	// FeedInfo is nil when the feed has no feed_info.txt, or when that file
 	// lacks a required column or has no data row that can be read.
@@ -556,6 +557,16 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 				return
 			},
 			Optional: true,
+		},
+		{
+			File: constants.AttributionsFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				result.Attributions, w = parseAttributions(file, result.Agencies, routeIdToRoute, tripIdToScheduledTrip)
+				return
+			},
+			Optional: true,
+			// Each row stands alone, so rows read before the error are kept.
+			Discard: func() {},
 		},
 		{
 			File: "frequencies.txt",
