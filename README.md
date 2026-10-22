@@ -126,6 +126,18 @@ earlier versions should note:
   `LocationsFileInvalid` warning; a single unusable Feature is skipped with a
   `LocationInvalidGeometry` warning. Neither stops the rest of the feed from parsing.
 
+## stops.txt and upgrading
+
+The parser reads `location_type` as GTFS defines it. Users upgrading from earlier versions
+should note:
+
+- A stop with a parent station is no longer read as `StopType_Platform`. It is read as its
+  `location_type`, usually `StopType_Stop`. To tell a platform from a standalone stop, check
+  `stop.Parent != nil`. `StopType_Platform` is deprecated and never produced.
+- A `location_type` that is not empty or `0` through `4` adds a `StopInvalidLocationType`
+  warning. The stop is still kept as `StopType_Stop`, as before. Whitespace around the value is
+  ignored, so ` 1` now parses as `StopType_Station`.
+
 ## transfers.txt and upgrading
 
 - `transfer_type` values `4` and `5` (linked trips) now parse as `TransferType_InSeat` and

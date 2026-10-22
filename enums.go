@@ -888,18 +888,23 @@ const (
 	StopType_Platform StopType = 5
 )
 
-func parseStopType(s string) StopType {
-	switch s {
+// parseStopType reads a stops.txt location_type, ignoring surrounding
+// whitespace. Empty means 0. ok is false for any value GTFS does not define,
+// which is read as StopType_Stop.
+func parseStopType(s string) (t StopType, ok bool) {
+	switch strings.TrimSpace(s) {
+	case "", "0":
+		return StopType_Stop, true
 	case "1":
-		return StopType_Station
+		return StopType_Station, true
 	case "2":
-		return StopType_EntranceOrExit
+		return StopType_EntranceOrExit, true
 	case "3":
-		return StopType_GenericNode
+		return StopType_GenericNode, true
 	case "4":
-		return StopType_BoardingArea
+		return StopType_BoardingArea, true
 	default:
-		return StopType_Stop
+		return StopType_Stop, false
 	}
 }
 

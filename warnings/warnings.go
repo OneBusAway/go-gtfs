@@ -157,6 +157,18 @@ func (w TransferMissingTrip) Error() string {
 	return fmt.Sprintf("linked-trip transfer is missing %s", w.Column)
 }
 
+// StopInvalidLocationType is raised when a stops.txt row has a location_type
+// that GTFS does not define. Only empty and 0 through 4 are valid. The stop is
+// kept and read as a stop (location_type 0).
+type StopInvalidLocationType struct {
+	StopID string
+	Value  string
+}
+
+func (w StopInvalidLocationType) Error() string {
+	return fmt.Sprintf("stop %q has invalid location_type %q; read as a stop", w.StopID, w.Value)
+}
+
 // TransferMissingStop is raised when a transfers.txt row that does not link
 // trips (transfer_type empty or 0 to 3) leaves from_stop_id or to_stop_id
 // empty. GTFS requires both for these types. The row is skipped.
