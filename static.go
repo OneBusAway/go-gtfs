@@ -71,6 +71,7 @@ type Stop struct {
 	Id                 string
 	Code               string
 	Name               string
+	TtsName            string
 	Description        string
 	ZoneId             string
 	Longitude          *float64
@@ -723,6 +724,7 @@ func parseStops(csv *csv.File, inheritWheelchairBoarding bool) []Stop {
 	idColumn := csv.RequiredColumn("stop_id")
 	codeColumn := csv.OptionalColumn("stop_code")
 	nameColumn := csv.OptionalColumn("stop_name")
+	ttsNameColumn := csv.OptionalColumn("tts_stop_name")
 	descriptionColumn := csv.OptionalColumn("stop_desc")
 	zoneIdColumn := csv.OptionalColumn("zone_id")
 	longitudeColumn := csv.OptionalColumn("stop_lon")
@@ -751,6 +753,7 @@ func parseStops(csv *csv.File, inheritWheelchairBoarding bool) []Stop {
 			Id:                 stopID,
 			Code:               codeColumn.Read(),
 			Name:               nameColumn.Read(),
+			TtsName:            ttsNameColumn.Read(),
 			Description:        descriptionColumn.Read(),
 			ZoneId:             zoneIdColumn.Read(),
 			Longitude:          parseFloat64(longitudeColumn.Read()),
