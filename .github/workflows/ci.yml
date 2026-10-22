@@ -64,7 +64,11 @@ jobs:
           go-version-file: ${{ matrix.go-version-file }}
 
       - name: Test
-        run: go test -race -count=1 -coverprofile=coverage.out ./...
+        run: go test -count=1 -coverprofile=coverage.out ./...
+
+      # Memory measurement tests skip themselves here.
+      - name: Test with race detector
+        run: go test -race -count=1 ./...
 
       - name: Report coverage
         if: matrix.name == 'stable'

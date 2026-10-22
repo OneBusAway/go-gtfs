@@ -222,6 +222,9 @@ type parseMemory struct {
 
 func measureParseStatic(t *testing.T, feed []byte, opts ParseStaticOptions) (*Static, parseMemory) {
 	t.Helper()
+	if raceEnabled {
+		t.Skip("skipping memory measurement under the race detector, which inflates heap usage")
+	}
 	defer debug.SetGCPercent(debug.SetGCPercent(10))
 	var before, after runtime.MemStats
 	runtime.GC()
