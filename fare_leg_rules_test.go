@@ -220,3 +220,67 @@ func TestParseTimeframes_ServiceIsShared(t *testing.T) {
 		t.Error("Timeframe.Service does not point into Static.Services")
 	}
 }
+
+// An unset timeframe in a leg rule matches what the other rules leave out,
+// so rules naming a timeframe group must not be skipped while the rest stay.
+func TestParseFareLegRules_IncompleteTimeframes(t *testing.T) {
+	const rules = "leg_group_id,from_timeframe_group_id,fare_product_id"
+	t.Run("unreadable timeframes.txt drops every leg rule", func(t *testing.T) {
+		static := parseFaresV2Feed(t, legRuleFiles(map[string][]string{
+			"timeframes.txt":     {"timeframe_group_id,service_id", "peak,service_id", "broken,x,y"},
+			"fare_leg_rules.txt": {rules, "peak_rule,peak,Bus", "other,,Bus2"},
+		}))
+		if len(static.FareLegRules) != 0 {
+			t.Errorf("got rules %v, want none", summarizeFareLegRules(static.FareLegRules))
+		}
+		want := []warnings.StaticWarningKind{warnings.FileUnreadable{Reason: "record on line 3: wrong number of fields"}}
+		if diff := cmp.Diff(warningKinds(static.Warnings), want); diff != "" {
+			t.Errorf("Warnings mismatch (-got +want):\n%s", diff)
+		}
+	})
+	t.Run("rules naming a group that lost a row are skipped", func(t *testing.T) {
+		static := parseFaresV2Feed(t, legRuleFiles(map[string][]string{
+			"timeframes.txt":     {"timeframe_group_id,start_time,end_time,service_id", "peak,07:00:00,09:00:00,service_id", "peak,16:00:00,99:00:00,service_id"},
+			"fare_leg_rules.txt": {rules, "peak_rule,peak,Bus", "other,,Bus2"},
+		}))
+		if diff := cmp.Diff(summarizeFareLegRules(static.FareLegRules), []string{"group=other network= from= to= fromTime= toTime= product=Bus2 priority=none"}); diff != "" {
+			t.Errorf("FareLegRules mismatch (-got +want):\n%s", diff)
+		}
+		want := []warnings.StaticWarningKind{
+			warnings.TimeframeInvalid{TimeframeGroupID: "peak", Reason: `invalid end_time "99:00:00"`},
+			warnings.FareLegRuleInvalid{LegGroupID: "peak_rule", Reason: `from_timeframe_group_id "peak" lost a timeframes.txt row`},
+		}
+		if diff := cmp.Diff(warningKinds(static.Warnings), want); diff != "" {
+			t.Errorf("Warnings mismatch (-got +want):\n%s", diff)
+		}
+	})
+}
+
+func TestParseTimeframes_Overlap(t *testing.T) {
+	static := parseFaresV2Feed(t, map[string][]string{"timeframes.txt": {
+		"timeframe_group_id,start_time,end_time,service_id",
+		"peak,07:00:00,09:00:00,service_id",
+		"peak,08:30:00,10:00:00,service_id",
+		"peak,10:00:00,11:00:00,service_id",
+		"other,08:00:00,09:00:00,service_id",
+	}})
+	if len(static.Timeframes) != 4 {
+		t.Errorf("got %d timeframes, want all 4 kept", len(static.Timeframes))
+	}
+	want := []warnings.StaticWarningKind{warnings.TimeframeOverlap{TimeframeGroupID: "peak", ServiceID: "service_id"}}
+	if diff := cmp.Diff(warningKinds(static.Warnings), want); diff != "" {
+		t.Errorf("Warnings mismatch (-got +want):\n%s", diff)
+	}
+}
+
+// A skipped timeframe row with no group must not count as every rule's
+// empty timeframe group losing a row.
+func TestParseFareLegRules_TimeframeRowWithoutGroup(t *testing.T) {
+	static := parseFaresV2Feed(t, legRuleFiles(map[string][]string{
+		"timeframes.txt":     {"timeframe_group_id,service_id", ",service_id", "peak,service_id"},
+		"fare_leg_rules.txt": {"leg_group_id,from_timeframe_group_id,fare_product_id", "other,,Bus2"},
+	}))
+	if len(static.FareLegRules) != 1 {
+		t.Errorf("got rules %v, want the rule without a timeframe kept", summarizeFareLegRules(static.FareLegRules))
+	}
+}

@@ -452,6 +452,18 @@ func (w TimeframeInvalid) Error() string {
 	return fmt.Sprintf("timeframe in group %q is invalid: %s", w.TimeframeGroupID, w.Reason)
 }
 
+// TimeframeOverlap is raised when two timeframes.txt rows with the same
+// timeframe_group_id and service_id overlap, which GTFS forbids. Both are
+// kept.
+type TimeframeOverlap struct {
+	TimeframeGroupID string
+	ServiceID        string
+}
+
+func (w TimeframeOverlap) Error() string {
+	return fmt.Sprintf("timeframe group %q has overlapping intervals for service %q", w.TimeframeGroupID, w.ServiceID)
+}
+
 // FareLegRuleInvalid is raised when a fare_leg_rules.txt row is skipped.
 // Since an unset field in a leg rule matches what the other rules leave out,
 // a skipped rule can change what the remaining rules match.

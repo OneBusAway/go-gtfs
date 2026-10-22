@@ -1,7 +1,9 @@
 package gtfs
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -43,19 +45,20 @@ type FareLegRule struct {
 
 // parseTimeframes reads timeframes.txt. A row is skipped with a warning if
 // a required value is missing, it sets only one of start_time and end_time,
-// a time is invalid or after 24:00:00, or its service_id is unknown.
-func parseTimeframes(csv *csv.File, serviceIdToService map[string]*Service) ([]Timeframe, []warnings.StaticWarning) {
+// a time is invalid or after 24:00:00, or its service_id is unknown. lostRow
+// holds the groups that had a row skipped. Overlapping intervals in one group
+// and service, which GTFS forbids, are kept with a warning.
+func parseTimeframes(csv *csv.File, serviceIdToService map[string]*Service) (timeframes []Timeframe, lostRow map[string]bool, w []warnings.StaticWarning) {
 	groupIDColumn := csv.RequiredColumn("timeframe_group_id")
 	startColumn := csv.OptionalColumn("start_time")
 	endColumn := csv.OptionalColumn("end_time")
 	serviceIDColumn := csv.RequiredColumn("service_id")
 
 	if w := checkForMissingColumns(csv); len(w) > 0 {
-		return nil, w
+		return nil, nil, w
 	}
 
-	var timeframes []Timeframe
-	var w []warnings.StaticWarning
+	lostRow = map[string]bool{}
 	for csv.NextRow() {
 		tf := Timeframe{GroupId: groupIDColumn.Read()}
 		var timeReason string
@@ -74,11 +77,38 @@ func parseTimeframes(csv *csv.File, serviceIdToService map[string]*Service) ([]T
 		}
 		if reason != "" {
 			w = append(w, warnings.NewStaticWarning(csv, warnings.TimeframeInvalid{TimeframeGroupID: tf.GroupId, Reason: reason}))
+			if tf.GroupId != "" {
+				lostRow[tf.GroupId] = true
+			}
 			continue
 		}
 		timeframes = append(timeframes, tf)
 	}
-	return timeframes, w
+
+	type groupService struct {
+		group   string
+		service *Service
+	}
+	intervals := map[groupService][]Timeframe{}
+	var order []groupService
+	for _, tf := range timeframes {
+		k := groupService{tf.GroupId, tf.Service}
+		if intervals[k] == nil {
+			order = append(order, k)
+		}
+		intervals[k] = append(intervals[k], tf)
+	}
+	for _, k := range order {
+		tfs := intervals[k]
+		slices.SortFunc(tfs, func(a, b Timeframe) int { return cmp.Compare(a.StartTime, b.StartTime) })
+		for i := 1; i < len(tfs); i++ {
+			if tfs[i].StartTime < tfs[i-1].EndTime {
+				w = append(w, warnings.NewFileWarning(csv.Name(), warnings.TimeframeOverlap{TimeframeGroupID: k.group, ServiceID: k.service.Id}))
+				break
+			}
+		}
+	}
+	return timeframes, lostRow, w
 }
 
 // parseTimeframeTimes reads a timeframe's start_time and end_time, which
@@ -121,7 +151,10 @@ func parseTimeframeTime(raw string) (time.Duration, bool) {
 // warning if fare_product_id is missing, any ID is unknown, rule_priority is
 // not a non-negative integer, or it repeats an earlier row's primary key.
 // Reading an unknown ID as unset would change what the rule matches.
-func parseFareLegRules(csv *csv.File, networks []Network, areas []Area, timeframes []Timeframe, products []FareProduct) ([]FareLegRule, []warnings.StaticWarning) {
+//
+// A rule naming a timeframe group in lostTimeframes, which lost a row in
+// timeframes.txt, is skipped too: its time window would silently shrink.
+func parseFareLegRules(csv *csv.File, networks []Network, areas []Area, timeframes []Timeframe, lostTimeframes map[string]bool, products []FareProduct) ([]FareLegRule, []warnings.StaticWarning) {
 	legGroupIDColumn := csv.OptionalColumn("leg_group_id")
 	networkIDColumn := csv.OptionalColumn("network_id")
 	fromAreaIDColumn := csv.OptionalColumn("from_area_id")
@@ -181,6 +214,10 @@ func parseFareLegRules(csv *csv.File, networks []Network, areas []Area, timefram
 			reason = fmt.Sprintf("unknown from_timeframe_group_id %q", r.FromTimeframeGroupId)
 		case r.ToTimeframeGroupId != "" && !timeframeGroups[r.ToTimeframeGroupId]:
 			reason = fmt.Sprintf("unknown to_timeframe_group_id %q", r.ToTimeframeGroupId)
+		case lostTimeframes[r.FromTimeframeGroupId]:
+			reason = fmt.Sprintf("from_timeframe_group_id %q lost a timeframes.txt row", r.FromTimeframeGroupId)
+		case lostTimeframes[r.ToTimeframeGroupId]:
+			reason = fmt.Sprintf("to_timeframe_group_id %q lost a timeframes.txt row", r.ToTimeframeGroupId)
 		case rulePriorityColumn.Exists() && (r.RulePriority == nil || *r.RulePriority < 0):
 			reason = fmt.Sprintf("invalid rule_priority %q", rawPriority)
 		case seen[k]:

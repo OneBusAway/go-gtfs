@@ -46,6 +46,7 @@ func TestFlexWarningKindsHaveMessages(t *testing.T) {
 		{FareMediaInvalid{FareMediaID: "m", Reason: "r"}, `fare media "m" is invalid: r`},
 		{FareProductInvalid{FareProductID: "p", Reason: "r"}, `fare product "p" is invalid: r`},
 		{TimeframeInvalid{TimeframeGroupID: "g", Reason: "r"}, `timeframe in group "g" is invalid: r`},
+		{TimeframeOverlap{TimeframeGroupID: "g", ServiceID: "s"}, `timeframe group "g" has overlapping intervals for service "s"`},
 		{FareLegRuleInvalid{LegGroupID: "g", Reason: "r"}, `fare leg rule in group "g" is invalid: r`},
 		{FareProductDefaultCategory{FareProductID: "p", Defaults: 2}, `fare product "p" has 2 default rider categories among its eligible ones; want exactly 1`},
 		{StopAreaInvalid{AreaID: "a", StopID: "s", Reason: "r"}, `stop "s" in area "a" is skipped: r`},

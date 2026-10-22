@@ -424,6 +424,10 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 	var routeIdToRoute map[string]*Route
 	// GTFS forbids routes.txt network_id when either network file exists.
 	networkFilesPresent := !isAbsentOrEmpty(fileNameToFile[constants.NetworksFile]) || !isAbsentOrEmpty(fileNameToFile[constants.RouteNetworksFile])
+	// Timeframe groups that lost a row, and whether timeframes.txt could not
+	// be read; both affect which fare leg rules can be kept.
+	var lostTimeframes map[string]bool
+	timeframesUnreadable := false
 	// Set when a Fares V1 file cannot be read or lacks a required column, so
 	// that both are dropped.
 	faresV1Unreadable := false
@@ -654,16 +658,23 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 		{
 			File: constants.TimeframesFile,
 			Action: func(file *csv.File) (w []warnings.StaticWarning) {
-				result.Timeframes, w = parseTimeframes(file, servicesByID(result.Services))
+				result.Timeframes, lostTimeframes, w = parseTimeframes(file, servicesByID(result.Services))
 				return
 			},
 			Optional: true,
-			Discard:  func() { result.Timeframes = nil },
+			Discard: func() {
+				result.Timeframes = nil
+				timeframesUnreadable = true
+			},
 		},
 		{
 			File: constants.FareLegRulesFile,
 			Action: func(file *csv.File) (w []warnings.StaticWarning) {
-				result.FareLegRules, w = parseFareLegRules(file, result.Networks, result.Areas, result.Timeframes, result.FareProducts)
+				// Without the timeframes, rules naming them would be
+				// skipped and the rest would match more than they should.
+				if !timeframesUnreadable {
+					result.FareLegRules, w = parseFareLegRules(file, result.Networks, result.Areas, result.Timeframes, lostTimeframes, result.FareProducts)
+				}
 				return
 			},
 			Optional: true,
