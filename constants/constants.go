@@ -14,4 +14,5 @@ const (
 	LocationsGeoJSONFile   StaticFile = "locations.geojson"
 	PathwaysFile           StaticFile = "pathways.txt"
 	TransfersFile          StaticFile = "transfers.txt"
+	TranslationsFile       StaticFile = "translations.txt"
 )
