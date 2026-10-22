@@ -92,3 +92,34 @@ jobs:
           repo-checkout: false
           go-version-input: stable
           go-package: ./...
+
+  generated:
+    name: Generated code
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - uses: bufbuild/buf-action@85aebf73123b5c15fd5528aaecbf9129cddf7fa7 # v1.6.0
+        with:
+          version: 1.73.0
+          # sha256 of buf-Linux-x86_64 from the v1.73.0 release.
+          checksum: 8f2986298ad08f0cc1bf999b9797b7c383adf32d7edf0f73d6f1e1a701baeac1
+          setup_only: true
+
+      - name: Check proto/*.pb.go match the .proto sources
+        run: |
+          # Delete first so a .pb.go whose .proto was removed or renamed shows up as a diff.
+          rm -f proto/*.pb.go
+          buf generate
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            echo "::error::Generated code is out of date. Run 'buf generate' and commit the result."
+            exit 1
+          fi

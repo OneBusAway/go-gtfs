@@ -1,6 +1,8 @@
-version: v1
+version: v2
 plugins:
-  - name: go
+  # protoc-gen-go is pinned by the tool directive in go.mod, so the generated
+  # code always matches the google.golang.org/protobuf version the library uses.
+  - local: ["go", "tool", "protoc-gen-go"]
     out: ./
     opt:
       - paths=source_relative
