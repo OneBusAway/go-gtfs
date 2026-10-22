@@ -115,19 +115,32 @@ func NewTranslator(translations []Translation) *Translator {
 	return t
 }
 
-// Translate returns the translation into language of field in table for one
-// record, identified as translations.txt does (recordSubID is the
-// stop_sequence for stop_times and empty otherwise; both IDs are empty for
-// feed_info). value is the field's original value. A translation selected by
-// record ID takes precedence over one selected by value, as GTFS requires.
-func (t *Translator) Translate(table, field, language, recordID, recordSubID, value string) (string, bool) {
-	key := translationKey{table: table, field: field, language: language, recordID: recordID, recordSubID: recordSubID}
+// TranslationLookup names the field of one record to translate.
+type TranslationLookup struct {
+	TableName string
+	FieldName string
+	Language  string
+	// RecordId and RecordSubId identify the record as translations.txt
+	// does: for stop_times, the trip_id and stop_sequence; for feed_info,
+	// both empty.
+	RecordId    string
+	RecordSubId string
+	// FieldValue is the field's original value, for translations that
+	// select by value.
+	FieldValue string
+}
+
+// Translate returns the translation that applies to the field in q. A
+// translation selected by record ID takes precedence over one selected by
+// value, as GTFS requires.
+func (t *Translator) Translate(q TranslationLookup) (string, bool) {
+	key := translationKey{table: q.TableName, field: q.FieldName, language: q.Language, recordID: q.RecordId, recordSubID: q.RecordSubId}
 	if s, ok := t.translations[key]; ok {
 		return s, true
 	}
-	if value == "" {
+	if q.FieldValue == "" {
 		return "", false
 	}
-	s, ok := t.translations[translationKey{table: table, field: field, language: language, value: value}]
+	s, ok := t.translations[translationKey{table: q.TableName, field: q.FieldName, language: q.Language, value: q.FieldValue}]
 	return s, ok
 }

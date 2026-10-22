@@ -153,23 +153,22 @@ func TestTranslator(t *testing.T) {
 		{TableName: "stops", FieldName: "stop_name", Language: "sv", Translation: "duplicate", RecordId: "S1"},
 	})
 	for _, tc := range []struct {
-		desc                         string
-		table, field, language       string
-		recordID, recordSubID, value string
-		want                         string
-		wantOK                       bool
+		desc   string
+		q      TranslationLookup
+		want   string
+		wantOK bool
 	}{
-		{"record_id wins over field_value", "stops", "stop_name", "sv", "S1", "", "Kirkko", "Kyrkan (S1)", true},
-		{"field_value applies to other records", "stops", "stop_name", "sv", "S2", "", "Kirkko", "Kyrkan (by value)", true},
-		{"field_value must match exactly", "stops", "stop_name", "sv", "S2", "", "Kirkko 2", "", false},
-		{"other language", "stops", "stop_name", "en", "S1", "", "Kirkko", "", false},
-		{"other field", "stops", "stop_desc", "sv", "S1", "", "Kirkko", "", false},
-		{"record_sub_id", "stop_times", "stop_headsign", "sv", "T1", "3", "Keskusta", "Centrum", true},
-		{"other record_sub_id", "stop_times", "stop_headsign", "sv", "T1", "4", "Keskusta", "", false},
-		{"feed_info", "feed_info", "feed_publisher_name", "sv", "", "", "Metro", "Metro SV", true},
+		{"record_id wins over field_value", TranslationLookup{"stops", "stop_name", "sv", "S1", "", "Kirkko"}, "Kyrkan (S1)", true},
+		{"field_value applies to other records", TranslationLookup{"stops", "stop_name", "sv", "S2", "", "Kirkko"}, "Kyrkan (by value)", true},
+		{"field_value must match exactly", TranslationLookup{"stops", "stop_name", "sv", "S2", "", "Kirkko 2"}, "", false},
+		{"other language", TranslationLookup{"stops", "stop_name", "en", "S1", "", "Kirkko"}, "", false},
+		{"other field", TranslationLookup{"stops", "stop_desc", "sv", "S1", "", "Kirkko"}, "", false},
+		{"record_sub_id", TranslationLookup{"stop_times", "stop_headsign", "sv", "T1", "3", "Keskusta"}, "Centrum", true},
+		{"other record_sub_id", TranslationLookup{"stop_times", "stop_headsign", "sv", "T1", "4", "Keskusta"}, "", false},
+		{"feed_info", TranslationLookup{"feed_info", "feed_publisher_name", "sv", "", "", "Metro"}, "Metro SV", true},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			got, ok := translator.Translate(tc.table, tc.field, tc.language, tc.recordID, tc.recordSubID, tc.value)
+			got, ok := translator.Translate(tc.q)
 			if got != tc.want || ok != tc.wantOK {
 				t.Errorf("Translate() = %q, %t, want %q, %t", got, ok, tc.want, tc.wantOK)
 			}
