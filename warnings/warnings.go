@@ -306,6 +306,36 @@ func (w AttributionWithoutRole) Error() string {
 	return fmt.Sprintf("attribution %q has no role; set is_producer, is_operator or is_authority", w.AttributionID)
 }
 
+// NetworksDefinedTwice is raised when routes.txt sets network_id and the
+// feed also has networks.txt or route_networks.txt, which GTFS forbids. The
+// network files are used and routes.txt network_id is ignored.
+type NetworksDefinedTwice struct{}
+
+func (w NetworksDefinedTwice) Error() string {
+	return "routes.txt network_id is ignored because networks.txt or route_networks.txt is present"
+}
+
+// NetworkInvalid is raised when a networks.txt row is skipped.
+type NetworkInvalid struct {
+	NetworkID string
+	Reason    string
+}
+
+func (w NetworkInvalid) Error() string {
+	return fmt.Sprintf("network %q is invalid: %s", w.NetworkID, w.Reason)
+}
+
+// RouteNetworkInvalid is raised when a route_networks.txt row is skipped.
+type RouteNetworkInvalid struct {
+	RouteID   string
+	NetworkID string
+	Reason    string
+}
+
+func (w RouteNetworkInvalid) Error() string {
+	return fmt.Sprintf("route %q in network %q is skipped: %s", w.RouteID, w.NetworkID, w.Reason)
+}
+
 // TransferMissingStop is raised when a transfers.txt row that does not link
 // trips (transfer_type empty or 0 to 3) leaves from_stop_id or to_stop_id
 // empty. GTFS requires both for these types. The row is skipped.
