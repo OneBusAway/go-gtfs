@@ -17,7 +17,9 @@ type FeedInfo struct {
 	Language        string
 	DefaultLanguage string
 	// StartDate and EndDate bound the period of complete and reliable
-	// schedule data, in the first agency's timezone. Nil when not given.
+	// schedule data, in the first agency's timezone. Each is midnight at the
+	// start of its day, and both days are included, so service runs through
+	// the whole of EndDate's day. Nil when not given or not a valid date.
 	StartDate    *time.Time
 	EndDate      *time.Time
 	Version      string

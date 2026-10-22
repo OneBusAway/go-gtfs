@@ -36,7 +36,7 @@ type Static struct {
 	BookingRules []BookingRule
 
 	// FeedInfo is nil when the feed has no feed_info.txt, or when that file
-	// lacks a required column or has no data row.
+	// lacks a required column, has no data row, or cannot be read as CSV.
 	FeedInfo *FeedInfo
 
 	// Warnings raised during GTFS static parsing.
