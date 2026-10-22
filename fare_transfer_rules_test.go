@@ -201,6 +201,12 @@ func TestParseFareTransferRules(t *testing.T) {
 			wantWarnings: []warnings.StaticWarningKind{warnings.FareTransferRuleInvalid{Reason: "duplicate from_leg_group_id, to_leg_group_id, fare_product_id, transfer_count and duration_limit"}},
 		},
 		{
+			desc:         "duplicate key written differently",
+			lines:        []string{header, "g1,g1,1,60,1,0,", "g1,g1,01,060,1,0,"},
+			want:         []string{"g1->g1 A_PLUS_AB product= count=1 limit=60 DEPARTURE_TO_DEPARTURE"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.FareTransferRuleInvalid{Reason: "duplicate from_leg_group_id, to_leg_group_id, fare_product_id, transfer_count and duration_limit"}},
+		},
+		{
 			desc:         "unreadable file is dropped",
 			lines:        []string{header, ",,,,,0,", "broken"},
 			wantWarnings: []warnings.StaticWarningKind{warnings.FileUnreadable{Reason: "record on line 3: wrong number of fields"}},
@@ -229,6 +235,22 @@ func TestParseFareTransferRules_LegRulesUnreadable(t *testing.T) {
 		t.Errorf("got rules %v, want none", summarizeFareTransferRules(static.FareTransferRules))
 	}
 	want := []warnings.StaticWarningKind{warnings.FileUnreadable{Reason: "record on line 3: wrong number of fields"}}
+	if diff := cmp.Diff(warningKinds(static.Warnings), want); diff != "" {
+		t.Errorf("Warnings mismatch (-got +want):\n%s", diff)
+	}
+}
+
+// A leg rules file without a required column has no leg groups, so the
+// transfer rules are dropped as when it cannot be read.
+func TestParseFareTransferRules_LegRulesMissingColumn(t *testing.T) {
+	static := parseFaresV2Feed(t, transferRuleFiles(map[string][]string{
+		"fare_leg_rules.txt":      {"leg_group_id,network_id", "g1,n1"},
+		"fare_transfer_rules.txt": {"from_leg_group_id,to_leg_group_id,fare_transfer_type", ",,0", "g1,g2,0"},
+	}))
+	if len(static.FareTransferRules) != 0 {
+		t.Errorf("got rules %v, want none", summarizeFareTransferRules(static.FareTransferRules))
+	}
+	want := []warnings.StaticWarningKind{warnings.MissingColumns{Columns: []string{"fare_product_id"}}}
 	if diff := cmp.Diff(warningKinds(static.Warnings), want); diff != "" {
 		t.Errorf("Warnings mismatch (-got +want):\n%s", diff)
 	}

@@ -432,8 +432,9 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 	// Timeframe groups that lost a row, which leg rules naming them cannot
 	// be kept without.
 	var lostTimeframes map[string]bool
-	// Set when timeframes.txt or fare_leg_rules.txt cannot be read, so the
-	// leg rules, and the transfer rules that refer to them, are dropped.
+	// Set when timeframes.txt or fare_leg_rules.txt cannot be read or lacks
+	// a required column, so the leg rules, and the transfer rules that refer
+	// to them, are dropped.
 	legRulesLost := false
 	// Set when a Fares V1 file cannot be read or lacks a required column, so
 	// that both are dropped.
@@ -666,6 +667,10 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 			File: constants.TimeframesFile,
 			Action: func(file *csv.File) (w []warnings.StaticWarning) {
 				result.Timeframes, lostTimeframes, w = parseTimeframes(file, servicesByID(result.Services))
+				// A missing required column leaves no timeframes at all.
+				if len(file.MissingRequiredColumns()) > 0 {
+					legRulesLost = true
+				}
 				return
 			},
 			Optional: true,
@@ -681,6 +686,11 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 				// skipped and the rest would match more than they should.
 				if !legRulesLost {
 					result.FareLegRules, w = parseFareLegRules(file, result.Networks, result.Areas, result.Timeframes, lostTimeframes, result.FareProducts)
+					// Without its leg groups, transfer rules with an empty
+					// group would match every leg.
+					if len(file.MissingRequiredColumns()) > 0 {
+						legRulesLost = true
+					}
 				}
 				return
 			},

@@ -2,6 +2,7 @@ package gtfs
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/OneBusAway/go-gtfs/csv"
@@ -26,7 +27,8 @@ type FareTransferRule struct {
 	FromLegGroupId string
 	ToLegGroupId   string
 	// TransferCount is how many consecutive transfers the rule covers, or
-	// -1 for no limit. It is nil when the leg groups differ.
+	// -1 for no limit. It is nil when the leg groups differ, and may be nil
+	// when both are empty.
 	TransferCount *int32
 	// DurationLimit is the transfer's time limit in seconds, or nil for
 	// none. DurationLimitType says what it is measured between, and is
@@ -191,7 +193,7 @@ func parseFareTransferRules(csv *csv.File, legRules []FareLegRule, products []Fa
 		r.TransferCount = parseInt32(rawCount)
 		r.DurationLimit = parseInt32(rawLimit)
 		sameGroup := r.FromLegGroupId != "" && r.FromLegGroupId == r.ToLegGroupId
-		k := key{r.FromLegGroupId, r.ToLegGroupId, r.FareProductId, rawCount, rawLimit}
+		k := key{r.FromLegGroupId, r.ToLegGroupId, r.FareProductId, int32Key(r.TransferCount), int32Key(r.DurationLimit)}
 		missing := csv.MissingRowKeys()
 		reason := ""
 		switch {
@@ -227,4 +229,12 @@ func parseFareTransferRules(csv *csv.File, legRules []FareLegRule, products []Fa
 		w = append(w, warnings.NewStaticWarning(csv, warnings.FareTransferRuleInvalid{Reason: reason}))
 	}
 	return rules, w
+}
+
+// int32Key gives a parsed value as a map key, so that "1" and "01" match.
+func int32Key(v *int32) string {
+	if v == nil {
+		return ""
+	}
+	return strconv.Itoa(int(*v))
 }
