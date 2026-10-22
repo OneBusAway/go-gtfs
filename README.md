@@ -91,7 +91,7 @@ Below is a list of the GTFS schedule files and whether they are currently suppor
 | [shapes.txt](https://gtfs.org/documentation/schedule/reference/#shapestxt)                             | ✅        | Optional                |                                                             |
 | [frequencies.txt](https://gtfs.org/documentation/schedule/reference/#frequenciestxt)                   | ✅        | Optional                |                                                             |
 | [transfers.txt](https://gtfs.org/documentation/schedule/reference/#transferstxt)                       | 🟨        | Optional                | Partially implemented                                       |
-| [pathways.txt](https://gtfs.org/documentation/schedule/reference/#pathwaystxt)                         | ❌        | Optional                |                                                             |
+| [pathways.txt](https://gtfs.org/documentation/schedule/reference/#pathwaystxt)                         | ✅        | Optional                |                                                             |
 | [levels.txt](https://gtfs.org/documentation/schedule/reference/#levelstxt)                             | ✅        | Conditionally Required  |                                                             |
 | [location_group_stops.txt](https://gtfs.org/documentation/schedule/reference/#location_group_stopstxt) | ✅        | Optional                |                                                             |
 | [locations.geojson](https://gtfs.org/documentation/schedule/reference/#locationsgeojson)               | ✅        | Optional                | Polygon and MultiPolygon only                               |

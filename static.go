@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,6 +25,7 @@ type Static struct {
 	Routes    []Route
 	Stops     []Stop
 	Levels    []Level
+	Pathways  []Pathway
 	Transfers []Transfer
 	Services  []Service
 	Trips     []ScheduledTrip
@@ -88,7 +90,8 @@ type Stop struct {
 	WheelchairBoarding WheelchairBoarding
 	PlatformCode       string
 	// Level is nil when stops.txt gives no level_id or names an unknown one.
-	Level *Level
+	Level  *Level
+	Access StopAccess
 }
 
 // Root returns the root stop.
@@ -460,6 +463,17 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 			Optional: locationsPresent,
 		},
 		{
+			File: constants.PathwaysFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				result.Pathways, w = parsePathways(file, stopIdToStop)
+				return
+			},
+			Optional: true,
+			// Pathways describe a station's whole access graph, so part of
+			// it would mislead routing.
+			Discard: func() { result.Pathways = nil },
+		},
+		{
 			File: constants.LocationGroupsFile,
 			Action: func(file *csv.File) (w []warnings.StaticWarning) {
 				result.LocationGroups, w = parseLocationGroups(file)
@@ -787,6 +801,7 @@ func parseStops(csv *csv.File, inheritWheelchairBoarding bool, levelIdToLevel ma
 	platformCodeColumn := csv.OptionalColumn("platform_code")
 	parentStationColumn := csv.OptionalColumn("parent_station")
 	levelIDColumn := csv.OptionalColumn("level_id")
+	accessColumn := csv.OptionalColumn("stop_access")
 
 	if err := csv.MissingRequiredColumns(); err != nil {
 		fmt.Println(err)
@@ -826,6 +841,24 @@ func parseStops(csv *csv.File, inheritWheelchairBoarding bool, levelIdToLevel ma
 		}
 		if !ok {
 			w = append(w, warnings.NewStaticWarning(csv, warnings.StopInvalidLocationType{StopID: stopID, Value: rawType}))
+		}
+		if rawAccess := accessColumn.Read(); rawAccess != "" {
+			access, ok := parseStopAccess(rawAccess)
+			// GTFS forbids stop_access on anything but a stop in a station.
+			reason := ""
+			switch {
+			case !ok:
+				reason = "not a valid value"
+			case stop.Type != StopType_Stop:
+				reason = "only a stop (location_type 0) may set it"
+			case parentStopId == "":
+				reason = "the stop has no parent_station"
+			default:
+				stop.Access = access
+			}
+			if reason != "" {
+				w = append(w, warnings.NewStaticWarning(csv, warnings.StopAccessInvalid{StopID: stopID, Value: rawAccess, Reason: reason}))
+			}
 		}
 		if levelID := levelIDColumn.Read(); levelID != "" {
 			stop.Level = levelIdToLevel[levelID]
@@ -1089,6 +1122,16 @@ func parseTransfers(csv *csv.File, stopIdToStop map[string]*Stop, routeIdToRoute
 		})
 	}
 	return transfers, w
+}
+
+// parseFiniteFloat64 is parseFloat64 that also rejects NaN and infinities,
+// which strconv accepts but GTFS float fields do not allow.
+func parseFiniteFloat64(s string) *float64 {
+	f := parseFloat64(s)
+	if f == nil || math.IsNaN(*f) || math.IsInf(*f, 0) {
+		return nil
+	}
+	return f
 }
 
 func parseInt32(s string) *int32 {
