@@ -43,6 +43,11 @@ type Static struct {
 	// Translations is nil when translations.txt is absent. Use NewTranslator
 	// to look them up.
 	Translations []Translation
+	// FareAttributes and FareRules are GTFS-Fares V1. Both are nil if either
+	// file cannot be read as CSV, since a fare with no rules applies to
+	// every trip.
+	FareAttributes []FareAttribute
+	FareRules      []FareRule
 	// Attributions with no Agency, Route or Trip apply to the whole feed.
 	Attributions []Attribution
 
@@ -408,6 +413,12 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 	var stopIdToStop map[string]*Stop
 	var routeIdToRoute map[string]*Route
 	// GTFS forbids routes.txt network_id when either network file exists.
+	// Set when a Fares V1 file cannot be read, so that both are dropped.
+	faresV1Unreadable := false
+	dropFaresV1 := func() {
+		faresV1Unreadable = true
+		result.FareAttributes, result.FareRules = nil, nil
+	}
 	networkFilesPresent := !isAbsentOrEmpty(fileNameToFile[constants.NetworksFile]) || !isAbsentOrEmpty(fileNameToFile[constants.RouteNetworksFile])
 	timezone := time.UTC
 	for _, table := range []struct {
@@ -471,6 +482,28 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 			Optional: true,
 			// Each row stands alone, so rows read before the error are kept.
 			Discard: func() {},
+		},
+		{
+			File: constants.FareAttributesFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				result.FareAttributes, w = parseFareAttributes(file, result.Agencies)
+				return
+			},
+			Optional: true,
+			Discard:  dropFaresV1,
+		},
+		{
+			File: constants.FareRulesFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				// Without the fares, every rule would only report an
+				// unknown fare_id.
+				if !faresV1Unreadable {
+					result.FareRules, w = parseFareRules(file, result.FareAttributes, routeIdToRoute)
+				}
+				return
+			},
+			Optional: true,
+			Discard:  dropFaresV1,
 		},
 		{
 			File: constants.RouteNetworksFile,
