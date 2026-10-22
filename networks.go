@@ -88,17 +88,16 @@ func parseRouteNetworks(csv *csv.File, networks []Network, routeIdToRoute map[st
 // networkIDs holds each route's network_id, or is nil if routes.txt has none.
 func networksFromRoutes(routes []Route, networkIDs []string) []Network {
 	var networks []Network
-	index := map[string]int{}
+	seen := map[string]bool{}
 	for _, id := range networkIDs {
-		if _, ok := index[id]; id != "" && !ok {
-			index[id] = len(networks)
+		if id != "" && !seen[id] {
+			seen[id] = true
 			networks = append(networks, Network{Id: id})
 		}
 	}
+	idToNetwork := networksByID(networks)
 	for i, id := range networkIDs {
-		if id != "" {
-			routes[i].Network = &networks[index[id]]
-		}
+		routes[i].Network = idToNetwork[id]
 	}
 	return networks
 }

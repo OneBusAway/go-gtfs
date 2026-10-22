@@ -85,8 +85,8 @@ Below is a list of the GTFS schedule files and whether they are currently suppor
 | [fare_transfer_rules.txt](https://gtfs.org/documentation/schedule/reference/#fare_transfer_rulestxt)       | ❌        | Optional                |                                                             |
 | [areas.txt](https://gtfs.org/documentation/schedule/reference/#areastxt)                               | ❌        | Optional                |                                                             |
 | [stop_areas.txt](https://gtfs.org/documentation/schedule/reference/#stop_areastxt)                     | ❌        | Optional                |                                                             |
-| [networks.txt](https://gtfs.org/documentation/schedule/reference/#networkstxt)                         | ❌        | Conditionally Forbidden |                                                             |
-| [route_networks.txt](https://gtfs.org/documentation/schedule/reference/#route_networkstxt)             | ❌        | Conditionally Forbidden |                                                             |
+| [networks.txt](https://gtfs.org/documentation/schedule/reference/#networkstxt)                         | ✅        | Conditionally Forbidden |                                                             |
+| [route_networks.txt](https://gtfs.org/documentation/schedule/reference/#route_networkstxt)             | ✅        | Conditionally Forbidden |                                                             |
 | [location_groups.txt](https://gtfs.org/documentation/schedule/reference/#location_groupstxt)           | ✅        | Optional                |                                                             |
 | [shapes.txt](https://gtfs.org/documentation/schedule/reference/#shapestxt)                             | ✅        | Optional                |                                                             |
 | [frequencies.txt](https://gtfs.org/documentation/schedule/reference/#frequenciestxt)                   | ✅        | Optional                |                                                             |
