@@ -2,7 +2,6 @@ package gtfs
 
 import (
 	"fmt"
-	"math"
 	"strings"
 
 	"github.com/OneBusAway/go-gtfs/csv"
@@ -160,6 +159,48 @@ func parsePathways(csv *csv.File, stopIdToStop map[string]*Stop) ([]Pathway, []w
 
 	var pathways []Pathway
 	var w []warnings.StaticWarning
+	invalid := func(id, format string, a ...any) {
+		w = append(w, warnings.NewStaticWarning(csv, warnings.PathwayInvalid{PathwayID: id, Reason: fmt.Sprintf(format, a...)}))
+	}
+	// resolve looks up a pathway end. GTFS forbids a station, or a stop
+	// riders reach directly from the street, as either end.
+	resolve := func(id, column, stopID string) *Stop {
+		stop := stopIdToStop[stopID]
+		switch {
+		case stop == nil:
+			invalid(id, "unknown %s %q", column, stopID)
+		case stop.Type == StopType_Station:
+			invalid(id, "%s %q is a station", column, stopID)
+		case stop.Access == StopAccess_Direct:
+			invalid(id, "%s %q has stop_access 1", column, stopID)
+		default:
+			return stop
+		}
+		return nil
+	}
+	// Each optional number is read as unset, with a warning, when it does
+	// not parse or is out of the range GTFS gives for it. A nil inRange
+	// accepts any value.
+	checked := func(id, column, raw string, valid bool) bool {
+		if raw != "" && !valid {
+			w = append(w, warnings.NewStaticWarning(csv, warnings.PathwayInvalidValue{PathwayID: id, Column: column, Value: raw}))
+		}
+		return raw != "" && valid
+	}
+	optionalFloat := func(id, column, raw string, inRange func(float64) bool) *float64 {
+		f := parseFiniteFloat64(raw)
+		if !checked(id, column, raw, f != nil && (inRange == nil || inRange(*f))) {
+			return nil
+		}
+		return f
+	}
+	optionalInt := func(id, column, raw string, inRange func(int32) bool) *int32 {
+		i := parseInt32(strings.TrimSpace(raw))
+		if !checked(id, column, raw, i != nil && inRange(*i)) {
+			return nil
+		}
+		return i
+	}
 	seen := map[string]bool{}
 	for csv.NextRow() {
 		id := idColumn.Read()
@@ -167,16 +208,13 @@ func parsePathways(csv *csv.File, stopIdToStop map[string]*Stop) ([]Pathway, []w
 		toID := toColumn.Read()
 		rawMode := modeColumn.Read()
 		rawBidirectional := bidirectionalColumn.Read()
-		invalid := func(format string, a ...any) {
-			w = append(w, warnings.NewStaticWarning(csv, warnings.PathwayInvalid{PathwayID: id, Reason: fmt.Sprintf(format, a...)}))
-		}
 		if missingKeys := csv.MissingRowKeys(); len(missingKeys) > 0 {
-			invalid("missing values %s", missingKeys)
+			invalid(id, "missing values %s", missingKeys)
 			continue
 		}
 		mode, ok := parsePathwayMode(rawMode)
 		if !ok {
-			invalid("invalid pathway_mode %q", rawMode)
+			invalid(id, "invalid pathway_mode %q", rawMode)
 			continue
 		}
 		var bidirectional bool
@@ -185,72 +223,33 @@ func parsePathways(csv *csv.File, stopIdToStop map[string]*Stop) ([]Pathway, []w
 		case "1":
 			bidirectional = true
 		default:
-			invalid("invalid is_bidirectional %q", rawBidirectional)
+			invalid(id, "invalid is_bidirectional %q", rawBidirectional)
 			continue
 		}
-		// GTFS forbids a station, or a stop riders reach directly from the
-		// street, as either end.
-		resolve := func(column, stopID string) *Stop {
-			stop := stopIdToStop[stopID]
-			switch {
-			case stop == nil:
-				invalid("unknown %s %q", column, stopID)
-			case stop.Type == StopType_Station:
-				invalid("%s %q is a station", column, stopID)
-			case stop.Access == StopAccess_Direct:
-				invalid("%s %q has stop_access 1", column, stopID)
-			default:
-				return stop
-			}
-			return nil
-		}
-		from := resolve("from_stop_id", fromID)
+		from := resolve(id, "from_stop_id", fromID)
 		if from == nil {
 			continue
 		}
-		to := resolve("to_stop_id", toID)
+		to := resolve(id, "to_stop_id", toID)
 		if to == nil {
 			continue
 		}
 		if seen[id] {
-			invalid("duplicate pathway_id")
+			invalid(id, "duplicate pathway_id")
 			continue
 		}
 		seen[id] = true
-
-		// Each optional number is read as unset, with a warning, when it
-		// does not parse or is out of the range GTFS gives for it.
-		checked := func(column, raw string, valid bool) bool {
-			if raw != "" && !valid {
-				w = append(w, warnings.NewStaticWarning(csv, warnings.PathwayInvalidValue{PathwayID: id, Column: column, Value: raw}))
-			}
-			return raw != "" && valid
-		}
-		optionalFloat := func(column, raw string, inRange func(float64) bool) *float64 {
-			f := parseFloat64(raw)
-			if !checked(column, raw, f != nil && !math.IsNaN(*f) && !math.IsInf(*f, 0) && inRange(*f)) {
-				return nil
-			}
-			return f
-		}
-		optionalInt := func(column, raw string, inRange func(int32) bool) *int32 {
-			i := parseInt32(strings.TrimSpace(raw))
-			if !checked(column, raw, i != nil && inRange(*i)) {
-				return nil
-			}
-			return i
-		}
 		pathways = append(pathways, Pathway{
 			Id:                   id,
 			From:                 from,
 			To:                   to,
 			Mode:                 mode,
 			IsBidirectional:      bidirectional,
-			Length:               optionalFloat("length", lengthColumn.Read(), func(f float64) bool { return f >= 0 }),
-			TraversalTime:        optionalInt("traversal_time", traversalTimeColumn.Read(), func(i int32) bool { return i > 0 }),
-			StairCount:           optionalInt("stair_count", stairCountColumn.Read(), func(i int32) bool { return i != 0 }),
-			MaxSlope:             optionalFloat("max_slope", maxSlopeColumn.Read(), func(float64) bool { return true }),
-			MinWidth:             optionalFloat("min_width", minWidthColumn.Read(), func(f float64) bool { return f > 0 }),
+			Length:               optionalFloat(id, "length", lengthColumn.Read(), func(f float64) bool { return f >= 0 }),
+			TraversalTime:        optionalInt(id, "traversal_time", traversalTimeColumn.Read(), func(i int32) bool { return i > 0 }),
+			StairCount:           optionalInt(id, "stair_count", stairCountColumn.Read(), func(i int32) bool { return i != 0 }),
+			MaxSlope:             optionalFloat(id, "max_slope", maxSlopeColumn.Read(), nil),
+			MinWidth:             optionalFloat(id, "min_width", minWidthColumn.Read(), func(f float64) bool { return f > 0 }),
 			SignpostedAs:         signpostedAsColumn.Read(),
 			ReversedSignpostedAs: reversedSignpostedAsColumn.Read(),
 		})

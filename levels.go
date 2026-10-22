@@ -2,7 +2,6 @@ package gtfs
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/OneBusAway/go-gtfs/csv"
 	"github.com/OneBusAway/go-gtfs/warnings"
@@ -41,8 +40,8 @@ func parseLevels(csv *csv.File) ([]Level, []warnings.StaticWarning) {
 			invalid(id, fmt.Sprintf("missing values %s", missingKeys))
 			continue
 		}
-		index := parseFloat64(rawIndex)
-		if index == nil || math.IsNaN(*index) || math.IsInf(*index, 0) {
+		index := parseFiniteFloat64(rawIndex)
+		if index == nil {
 			invalid(id, fmt.Sprintf("invalid level_index %q", rawIndex))
 			continue
 		}

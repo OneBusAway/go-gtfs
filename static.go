@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -1121,6 +1122,16 @@ func parseTransfers(csv *csv.File, stopIdToStop map[string]*Stop, routeIdToRoute
 		})
 	}
 	return transfers, w
+}
+
+// parseFiniteFloat64 is parseFloat64 that also rejects NaN and infinities,
+// which strconv accepts but GTFS float fields do not allow.
+func parseFiniteFloat64(s string) *float64 {
+	f := parseFloat64(s)
+	if f == nil || math.IsNaN(*f) || math.IsInf(*f, 0) {
+		return nil
+	}
+	return f
 }
 
 func parseInt32(s string) *int32 {

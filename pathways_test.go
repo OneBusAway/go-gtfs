@@ -35,28 +35,41 @@ func parsePathwaysFeed(t *testing.T, stopLines []string, pathwayLines ...string)
 	return static
 }
 
-// summarizePathways renders each pathway as one line, so a test can state the
-// expected result without building linked Stop values.
+// summarizePathways renders each pathway as one line of the fields that are
+// set, so a test can state the expected result without building linked Stop
+// values.
 func summarizePathways(pathways []Pathway) []string {
-	opt := func(p any) string {
-		switch v := p.(type) {
-		case *float64:
-			if v != nil {
-				return fmt.Sprint(*v)
-			}
-		case *int32:
-			if v != nil {
-				return fmt.Sprint(*v)
-			}
-		}
-		return "-"
-	}
 	var s []string
 	for _, p := range pathways {
-		s = append(s, fmt.Sprintf("%s %s->%s %s bidirectional=%t length=%s time=%s stairs=%s slope=%s width=%s sign=%q reversed=%q",
-			p.Id, stopID(p.From), stopID(p.To), p.Mode, p.IsBidirectional,
-			opt(p.Length), opt(p.TraversalTime), opt(p.StairCount), opt(p.MaxSlope), opt(p.MinWidth),
-			p.SignpostedAs, p.ReversedSignpostedAs))
+		line := fmt.Sprintf("%s %s->%s %s", p.Id, stopID(p.From), stopID(p.To), p.Mode)
+		if p.IsBidirectional {
+			line += " bidirectional"
+		}
+		for _, f := range []struct {
+			name  string
+			value any
+		}{
+			{"length", p.Length}, {"time", p.TraversalTime}, {"stairs", p.StairCount},
+			{"slope", p.MaxSlope}, {"width", p.MinWidth},
+		} {
+			switch v := f.value.(type) {
+			case *float64:
+				if v != nil {
+					line += fmt.Sprintf(" %s=%g", f.name, *v)
+				}
+			case *int32:
+				if v != nil {
+					line += fmt.Sprintf(" %s=%d", f.name, *v)
+				}
+			}
+		}
+		if p.SignpostedAs != "" {
+			line += fmt.Sprintf(" sign=%q", p.SignpostedAs)
+		}
+		if p.ReversedSignpostedAs != "" {
+			line += fmt.Sprintf(" reversed=%q", p.ReversedSignpostedAs)
+		}
+		s = append(s, line)
 	}
 	return s
 }
@@ -77,7 +90,7 @@ func TestParsePathways(t *testing.T) {
 			desc:     "all fields",
 			pathways: []string{fullHeader, "W1,E,N,1,1,12.5,30,-20,0.083,0.9,To trains,To street"},
 			wantSummary: []string{
-				`W1 E->N WALKWAY bidirectional=true length=12.5 time=30 stairs=-20 slope=0.083 width=0.9 sign="To trains" reversed="To street"`,
+				`W1 E->N WALKWAY bidirectional length=12.5 time=30 stairs=-20 slope=0.083 width=0.9 sign="To trains" reversed="To street"`,
 			},
 		},
 		{
@@ -87,27 +100,27 @@ func TestParsePathways(t *testing.T) {
 				"1,E,N,1,0", "2,E,N,2,0", "3,E,N,3,0", "4,E,N,4,0", "5,E,N,5,0", "6,E,N,6,0", "7,N,E,7,0",
 			},
 			wantSummary: []string{
-				"1 E->N WALKWAY bidirectional=false length=- time=- stairs=- slope=- width=- sign=\"\" reversed=\"\"",
-				"2 E->N STAIRS bidirectional=false length=- time=- stairs=- slope=- width=- sign=\"\" reversed=\"\"",
-				"3 E->N MOVING_SIDEWALK bidirectional=false length=- time=- stairs=- slope=- width=- sign=\"\" reversed=\"\"",
-				"4 E->N ESCALATOR bidirectional=false length=- time=- stairs=- slope=- width=- sign=\"\" reversed=\"\"",
-				"5 E->N ELEVATOR bidirectional=false length=- time=- stairs=- slope=- width=- sign=\"\" reversed=\"\"",
-				"6 E->N FARE_GATE bidirectional=false length=- time=- stairs=- slope=- width=- sign=\"\" reversed=\"\"",
-				"7 N->E EXIT_GATE bidirectional=false length=- time=- stairs=- slope=- width=- sign=\"\" reversed=\"\"",
+				"1 E->N WALKWAY",
+				"2 E->N STAIRS",
+				"3 E->N MOVING_SIDEWALK",
+				"4 E->N ESCALATOR",
+				"5 E->N ELEVATOR",
+				"6 E->N FARE_GATE",
+				"7 N->E EXIT_GATE",
 			},
 		},
 		{
 			desc:     "platform and boarding area",
 			pathways: []string{header + ",stair_count", "S,N,B,2,1,12", "S2,B,P,1,1,"},
 			wantSummary: []string{
-				`S N->B STAIRS bidirectional=true length=- time=- stairs=12 slope=- width=- sign="" reversed=""`,
-				`S2 B->P WALKWAY bidirectional=true length=- time=- stairs=- slope=- width=- sign="" reversed=""`,
+				`S N->B STAIRS bidirectional stairs=12`,
+				`S2 B->P WALKWAY bidirectional`,
 			},
 		},
 		{
 			desc:         "unknown to_stop_id",
 			pathways:     []string{header, "W,E,NOPE,1,0", "W2,E,N,1,0"},
-			wantSummary:  []string{`W2 E->N WALKWAY bidirectional=false length=- time=- stairs=- slope=- width=- sign="" reversed=""`},
+			wantSummary:  []string{`W2 E->N WALKWAY`},
 			wantWarnings: []warnings.StaticWarningKind{warnings.PathwayInvalid{PathwayID: "W", Reason: `unknown to_stop_id "NOPE"`}},
 		},
 		{
@@ -143,19 +156,19 @@ func TestParsePathways(t *testing.T) {
 		{
 			desc:        "padded enums are trimmed",
 			pathways:    []string{header, "W,E,N, 5,1 "},
-			wantSummary: []string{`W E->N ELEVATOR bidirectional=true length=- time=- stairs=- slope=- width=- sign="" reversed=""`},
+			wantSummary: []string{`W E->N ELEVATOR bidirectional`},
 		},
 		{
 			desc:         "duplicate pathway_id keeps the first",
 			pathways:     []string{header, "W,E,N,1,0", "W,N,E,2,0"},
-			wantSummary:  []string{`W E->N WALKWAY bidirectional=false length=- time=- stairs=- slope=- width=- sign="" reversed=""`},
+			wantSummary:  []string{`W E->N WALKWAY`},
 			wantWarnings: []warnings.StaticWarningKind{warnings.PathwayInvalid{PathwayID: "W", Reason: "duplicate pathway_id"}},
 		},
 		{
 			desc:     "out-of-range optional values are dropped with a warning",
 			pathways: []string{fullHeader, "W,E,N,1,0,-1,0,0,steep,0,,"},
 			wantSummary: []string{
-				`W E->N WALKWAY bidirectional=false length=- time=- stairs=- slope=- width=- sign="" reversed=""`,
+				`W E->N WALKWAY`,
 			},
 			wantWarnings: []warnings.StaticWarningKind{
 				warnings.PathwayInvalidValue{PathwayID: "W", Column: "length", Value: "-1"},
@@ -169,7 +182,7 @@ func TestParsePathways(t *testing.T) {
 			desc:     "zero length and slope are valid",
 			pathways: []string{fullHeader, "W,E,N,6,0,0,5,,0,1.5,,"},
 			wantSummary: []string{
-				`W E->N FARE_GATE bidirectional=false length=0 time=5 stairs=- slope=0 width=1.5 sign="" reversed=""`,
+				`W E->N FARE_GATE length=0 time=5 slope=0 width=1.5`,
 			},
 		},
 		{
