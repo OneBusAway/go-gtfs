@@ -986,14 +986,14 @@ func parseTransfers(csv *csv.File, stopIdToStop map[string]*Stop, routeIdToRoute
 			continue
 		}
 
-		if !linkedTrips && len(missingStopColumns) > 0 {
-			if !reportedMissingStopColumns {
-				w = append(w, missingColumnsWarning(csv, missingStopColumns)...)
-				reportedMissingStopColumns = true
-			}
-			continue
-		}
 		if !linkedTrips {
+			if len(missingStopColumns) > 0 {
+				if !reportedMissingStopColumns {
+					w = append(w, missingColumnsWarning(csv, missingStopColumns)...)
+					reportedMissingStopColumns = true
+				}
+				continue
+			}
 			for _, ref := range []struct{ column, id string }{
 				{"from_stop_id", fromStopID},
 				{"to_stop_id", toStopID},
