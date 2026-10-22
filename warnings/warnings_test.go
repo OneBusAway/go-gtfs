@@ -30,6 +30,8 @@ func TestFlexWarningKindsHaveMessages(t *testing.T) {
 		{TransferMissingStop{Column: "from_stop_id"}, "transfer is missing from_stop_id"},
 		{StopInvalidLocationType{StopID: "s", Value: "5"}, `stop "s" has invalid location_type "5"; read as a stop`},
 		{FileUnreadable{Reason: "r"}, "file could not be fully read: r"},
+		{StopUnknownLevel{StopID: "s", LevelID: "l"}, `stop "s" references unknown level "l"`},
+		{LevelInvalid{LevelID: "l", Reason: "r"}, `level "l" is invalid: r`},
 		{FeedInfoExtraRow{}, "feed_info.txt has more than one row; only the first is read"},
 		{FeedInfoMissingValues{Columns: []string{"feed_lang"}}, "feed info is missing values [feed_lang]"},
 		{FeedInfoInvalidDate{Column: "feed_end_date", Value: "x"}, `feed info feed_end_date "x" is not a YYYYMMDD date`},

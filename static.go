@@ -23,6 +23,7 @@ type Static struct {
 	Agencies  []Agency
 	Routes    []Route
 	Stops     []Stop
+	Levels    []Level
 	Transfers []Transfer
 	Services  []Service
 	Trips     []ScheduledTrip
@@ -86,6 +87,8 @@ type Stop struct {
 	Timezone           string
 	WheelchairBoarding WheelchairBoarding
 	PlatformCode       string
+	// Level is nil when stops.txt gives no level_id or names an unknown one.
+	Level *Level
 }
 
 // Root returns the root stop.
@@ -436,9 +439,20 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 			},
 		},
 		{
+			File: constants.LevelsFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				result.Levels, w = parseLevels(file)
+				return
+			},
+			Optional: true,
+			// Levels read before the error parsed cleanly. Keeping them
+			// spares stops on those levels an unknown-level warning.
+			Discard: func() {},
+		},
+		{
 			File: constants.StopsFile,
 			Action: func(file *csv.File) (w []warnings.StaticWarning) {
-				result.Stops, w = parseStops(file, opts.InheritWheelchairBoarding)
+				result.Stops, w = parseStops(file, opts.InheritWheelchairBoarding, levelsByID(result.Levels))
 				stopIdToStop = stopsByID(result.Stops)
 				return
 			},
@@ -757,7 +771,7 @@ func parseRouteSortOrder(raw string) *int32 {
 	return &i32
 }
 
-func parseStops(csv *csv.File, inheritWheelchairBoarding bool) ([]Stop, []warnings.StaticWarning) {
+func parseStops(csv *csv.File, inheritWheelchairBoarding bool, levelIdToLevel map[string]*Level) ([]Stop, []warnings.StaticWarning) {
 	idColumn := csv.RequiredColumn("stop_id")
 	codeColumn := csv.OptionalColumn("stop_code")
 	nameColumn := csv.OptionalColumn("stop_name")
@@ -772,6 +786,7 @@ func parseStops(csv *csv.File, inheritWheelchairBoarding bool) ([]Stop, []warnin
 	wheelchairBoardingColumn := csv.OptionalColumn("wheelchair_boarding")
 	platformCodeColumn := csv.OptionalColumn("platform_code")
 	parentStationColumn := csv.OptionalColumn("parent_station")
+	levelIDColumn := csv.OptionalColumn("level_id")
 
 	if err := csv.MissingRequiredColumns(); err != nil {
 		fmt.Println(err)
@@ -811,6 +826,12 @@ func parseStops(csv *csv.File, inheritWheelchairBoarding bool) ([]Stop, []warnin
 		}
 		if !ok {
 			w = append(w, warnings.NewStaticWarning(csv, warnings.StopInvalidLocationType{StopID: stopID, Value: rawType}))
+		}
+		if levelID := levelIDColumn.Read(); levelID != "" {
+			stop.Level = levelIdToLevel[levelID]
+			if stop.Level == nil {
+				w = append(w, warnings.NewStaticWarning(csv, warnings.StopUnknownLevel{StopID: stopID, LevelID: levelID}))
+			}
 		}
 		stopIdToIndex[stop.Id] = len(stops)
 		stops = append(stops, stop)
@@ -1606,6 +1627,14 @@ func parseTripStops(csv *csv.File, stopIdToStop map[string]*Stop, trips []Schedu
 		trips[i].Stops = tripStops
 		visitsByTrip[i] = nil
 	}
+}
+
+func levelsByID(levels []Level) map[string]*Level {
+	idToLevel := make(map[string]*Level, len(levels))
+	for i := range levels {
+		idToLevel[levels[i].Id] = &levels[i]
+	}
+	return idToLevel
 }
 
 func routesByID(routes []Route) map[string]*Route {
