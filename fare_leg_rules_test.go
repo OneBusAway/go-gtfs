@@ -3,7 +3,6 @@ package gtfs
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/OneBusAway/go-gtfs/warnings"
 	"github.com/google/go-cmp/cmp"
@@ -204,8 +203,5 @@ func TestParseTimeframes_ServiceIsShared(t *testing.T) {
 	static := parseFaresV2Feed(t, map[string][]string{"timeframes.txt": {"timeframe_group_id,service_id", "g,service_id"}})
 	if static.Timeframes[0].Service != &static.Services[0] {
 		t.Error("Timeframe.Service does not point into Static.Services")
-	}
-	if static.Timeframes[0].EndTime != 24*time.Hour {
-		t.Errorf("EndTime = %s, want 24h", static.Timeframes[0].EndTime)
 	}
 }

@@ -1459,10 +1459,7 @@ func parseScheduledTrips(csv *csv.File, routeIdToRoute map[string]*Route, servic
 		return nil
 	}
 
-	idToService := map[string]*Service{}
-	for i := range services {
-		idToService[services[i].Id] = &services[i]
-	}
+	idToService := servicesByID(services)
 	var trips []ScheduledTrip
 	for csv.NextRow() {
 		trip := ScheduledTrip{
@@ -1880,6 +1877,16 @@ func faresByID(fares []FareAttribute) map[string]*FareAttribute {
 		idToFare[fares[i].Id] = &fares[i]
 	}
 	return idToFare
+}
+
+// idSet returns the set of the items' IDs, for references to IDs that several
+// items may share, such as a fare_product_id.
+func idSet[T any](items []T, id func(T) string) map[string]bool {
+	set := make(map[string]bool, len(items))
+	for _, item := range items {
+		set[id(item)] = true
+	}
+	return set
 }
 
 func servicesByID(services []Service) map[string]*Service {

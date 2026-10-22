@@ -56,13 +56,10 @@ func parseTimeframes(csv *csv.File, serviceIdToService map[string]*Service) ([]T
 
 	var timeframes []Timeframe
 	var w []warnings.StaticWarning
-	parseTime := func(raw string) (time.Duration, bool) {
-		d, ok := parseGtfsTimeToDuration(strings.TrimSpace(raw))
-		return d, ok && d <= 24*time.Hour
-	}
 	for csv.NextRow() {
-		tf := Timeframe{GroupId: groupIDColumn.Read(), EndTime: 24 * time.Hour}
-		rawStart, rawEnd := startColumn.Read(), endColumn.Read()
+		tf := Timeframe{GroupId: groupIDColumn.Read()}
+		var timeReason string
+		tf.StartTime, tf.EndTime, timeReason = parseTimeframeTimes(startColumn.Read(), endColumn.Read())
 		serviceID := serviceIDColumn.Read()
 		tf.Service = serviceIdToService[serviceID]
 		missing := csv.MissingRowKeys()
@@ -70,18 +67,10 @@ func parseTimeframes(csv *csv.File, serviceIdToService map[string]*Service) ([]T
 		switch {
 		case len(missing) > 0:
 			reason = fmt.Sprintf("missing values %s", missing)
-		case (rawStart == "") != (rawEnd == ""):
-			reason = "start_time and end_time must both be set or both be empty"
+		case timeReason != "":
+			reason = timeReason
 		case tf.Service == nil:
 			reason = fmt.Sprintf("unknown service_id %q", serviceID)
-		}
-		if reason == "" && rawStart != "" {
-			var ok bool
-			if tf.StartTime, ok = parseTime(rawStart); !ok {
-				reason = fmt.Sprintf("invalid start_time %q", rawStart)
-			} else if tf.EndTime, ok = parseTime(rawEnd); !ok {
-				reason = fmt.Sprintf("invalid end_time %q", rawEnd)
-			}
 		}
 		if reason != "" {
 			w = append(w, warnings.NewStaticWarning(csv, warnings.TimeframeInvalid{TimeframeGroupID: tf.GroupId, Reason: reason}))
@@ -90,6 +79,28 @@ func parseTimeframes(csv *csv.File, serviceIdToService map[string]*Service) ([]T
 		timeframes = append(timeframes, tf)
 	}
 	return timeframes, w
+}
+
+// parseTimeframeTimes reads a timeframe's start_time and end_time, which
+// must both be set or both be empty, in which case they are 0 and 24h. A
+// non-empty reason means the row must be skipped.
+func parseTimeframeTimes(rawStart, rawEnd string) (start, end time.Duration, reason string) {
+	if rawStart == "" && rawEnd == "" {
+		return 0, 24 * time.Hour, ""
+	}
+	if rawStart == "" || rawEnd == "" {
+		return 0, 0, "start_time and end_time must both be set or both be empty"
+	}
+	// GTFS forbids times after 24:00:00 here.
+	start, ok := parseGtfsTimeToDuration(rawStart)
+	if !ok || start > 24*time.Hour {
+		return 0, 0, fmt.Sprintf("invalid start_time %q", rawStart)
+	}
+	end, ok = parseGtfsTimeToDuration(rawEnd)
+	if !ok || end > 24*time.Hour {
+		return 0, 0, fmt.Sprintf("invalid end_time %q", rawEnd)
+	}
+	return start, end, ""
 }
 
 // parseFareLegRules reads fare_leg_rules.txt. A row is skipped with a
@@ -112,14 +123,8 @@ func parseFareLegRules(csv *csv.File, networks []Network, areas []Area, timefram
 
 	networkIdToNetwork := networksByID(networks)
 	areaIdToArea := areasByID(areas)
-	timeframeGroups := map[string]bool{}
-	for _, tf := range timeframes {
-		timeframeGroups[tf.GroupId] = true
-	}
-	productIDs := map[string]bool{}
-	for _, p := range products {
-		productIDs[p.Id] = true
-	}
+	timeframeGroups := idSet(timeframes, func(tf Timeframe) string { return tf.GroupId })
+	productIDs := idSet(products, func(p FareProduct) string { return p.Id })
 	type key struct{ network, fromArea, toArea, fromTimeframe, toTimeframe, product string }
 	seen := map[key]bool{}
 
@@ -139,10 +144,11 @@ func parseFareLegRules(csv *csv.File, networks []Network, areas []Area, timefram
 		k := key{networkID, fromAreaID, toAreaID, r.FromTimeframeGroupId, r.ToTimeframeGroupId, r.FareProductId}
 		rawPriority := rulePriorityColumn.Read()
 		if rulePriorityColumn.Exists() {
-			r.RulePriority = new(int32)
-			if strings.TrimSpace(rawPriority) != "" {
-				r.RulePriority = parseInt32(strings.TrimSpace(rawPriority))
+			p := strings.TrimSpace(rawPriority)
+			if p == "" {
+				p = "0"
 			}
+			r.RulePriority = parseInt32(p)
 		}
 		missing := csv.MissingRowKeys()
 		reason := ""
