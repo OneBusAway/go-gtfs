@@ -92,11 +92,15 @@ func parseRiderCategories(csv *csv.File) ([]RiderCategory, []warnings.StaticWarn
 	seen := map[string]bool{}
 	for csv.NextRow() {
 		c := RiderCategory{Id: idColumn.Read(), Name: nameColumn.Read(), EligibilityUrl: eligibilityUrlColumn.Read()}
+		rawDefault := isDefaultColumn.Read()
+		isDefault, ok := parseZeroOrOne(rawDefault)
+		c.IsDefault = isDefault
+		missing := csv.MissingRowKeys()
 		reason := ""
-		switch rawDefault := isDefaultColumn.Read(); {
-		case len(csv.MissingRowKeys()) > 0:
-			reason = fmt.Sprintf("missing values %s", csv.MissingRowKeys())
-		case !parseZeroOrOne(rawDefault, &c.IsDefault):
+		switch {
+		case len(missing) > 0:
+			reason = fmt.Sprintf("missing values %s", missing)
+		case !ok:
 			reason = fmt.Sprintf("invalid is_default_fare_category %q", rawDefault)
 		case seen[c.Id]:
 			reason = "duplicate rider_category_id"
@@ -128,11 +132,12 @@ func parseFareMedia(csv *csv.File) ([]FareMedia, []warnings.StaticWarning) {
 		m := FareMedia{Id: idColumn.Read(), Name: nameColumn.Read()}
 		rawType := typeColumn.Read()
 		t := parseInt32(strings.TrimSpace(rawType))
+		missing := csv.MissingRowKeys()
 		reason := ""
 		switch {
-		case len(csv.MissingRowKeys()) > 0:
-			reason = fmt.Sprintf("missing values %s", csv.MissingRowKeys())
-		case t == nil || *t < 0 || *t > 4:
+		case len(missing) > 0:
+			reason = fmt.Sprintf("missing values %s", missing)
+		case t == nil || *t < int32(FareMediaType_None) || *t > int32(FareMediaType_MobileApp):
 			reason = fmt.Sprintf("invalid fare_media_type %q", rawType)
 		case seen[m.Id]:
 			reason = "duplicate fare_media_id"
@@ -168,14 +173,8 @@ func parseFareProducts(csv *csv.File, categories []RiderCategory, media []FareMe
 		return nil, w
 	}
 
-	categoryIdToCategory := make(map[string]*RiderCategory, len(categories))
-	for i := range categories {
-		categoryIdToCategory[categories[i].Id] = &categories[i]
-	}
-	mediaIdToMedia := make(map[string]*FareMedia, len(media))
-	for i := range media {
-		mediaIdToMedia[media[i].Id] = &media[i]
-	}
+	categoryIdToCategory := riderCategoriesByID(categories)
+	mediaIdToMedia := fareMediaByID(media)
 	type key struct{ product, category, media string }
 	seen := map[key]bool{}
 	var products []FareProduct
@@ -189,10 +188,12 @@ func parseFareProducts(csv *csv.File, categories []RiderCategory, media []FareMe
 		p.FareMedia = mediaIdToMedia[mediaID]
 		var ok bool
 		p.Amount, ok = parseCurrencyAmount(rawAmount, currency)
+		k := key{p.Id, categoryID, mediaID}
+		missing := csv.MissingRowKeys()
 		reason := ""
-		switch k := (key{p.Id, categoryID, mediaID}); {
-		case len(csv.MissingRowKeys()) > 0 || currency == "":
-			reason = fmt.Sprintf("missing values %s", csv.MissingRowKeys())
+		switch {
+		case len(missing) > 0 || currency == "":
+			reason = fmt.Sprintf("missing values %s", missing)
 		case !ok:
 			reason = fmt.Sprintf("invalid amount %q", rawAmount)
 		case categoryID != "" && p.RiderCategory == nil:
@@ -209,46 +210,41 @@ func parseFareProducts(csv *csv.File, categories []RiderCategory, media []FareMe
 		w = append(w, warnings.NewStaticWarning(csv, warnings.FareProductInvalid{FareProductID: p.Id, Reason: reason}))
 	}
 
-	// Check the default rider category of each product, in file order.
-	var order []string
-	eligible := map[string]map[*RiderCategory]bool{}
-	for _, p := range products {
-		if p.RiderCategory == nil {
-			continue
-		}
-		if eligible[p.Id] == nil {
-			eligible[p.Id] = map[*RiderCategory]bool{}
-			order = append(order, p.Id)
-		}
-		eligible[p.Id][p.RiderCategory] = true
+	// Count each product's distinct eligible categories and defaults, then
+	// warn once per product, in file order.
+	type eligible struct {
+		product  string
+		category *RiderCategory
 	}
-	for _, id := range order {
-		if len(eligible[id]) < 2 {
-			continue
-		}
-		defaults := 0
-		for c := range eligible[id] {
-			if c.IsDefault {
-				defaults++
+	seenCategory := map[eligible]bool{}
+	categoryCount, defaultCount := map[string]int{}, map[string]int{}
+	for _, p := range products {
+		if e := (eligible{p.Id, p.RiderCategory}); p.RiderCategory != nil && !seenCategory[e] {
+			seenCategory[e] = true
+			categoryCount[p.Id]++
+			if p.RiderCategory.IsDefault {
+				defaultCount[p.Id]++
 			}
 		}
-		if defaults != 1 {
-			w = append(w, warnings.NewFileWarning(csv.Name(), warnings.FareProductDefaultCategory{FareProductID: id, Defaults: defaults}))
+	}
+	for _, p := range products {
+		if categoryCount[p.Id] >= 2 && defaultCount[p.Id] != 1 {
+			w = append(w, warnings.NewFileWarning(csv.Name(), warnings.FareProductDefaultCategory{FareProductID: p.Id, Defaults: defaultCount[p.Id]}))
 		}
+		delete(categoryCount, p.Id)
 	}
 	return products, w
 }
 
 // parseZeroOrOne reads an enum that is 1 for true and 0 or empty for false,
-// ignoring surrounding whitespace, into v. It reports whether s was valid.
-func parseZeroOrOne(s string, v *bool) bool {
+// ignoring surrounding whitespace. ok is false for any other value.
+func parseZeroOrOne(s string) (v, ok bool) {
 	switch strings.TrimSpace(s) {
 	case "", "0":
-		*v = false
+		return false, true
 	case "1":
-		*v = true
+		return true, true
 	default:
-		return false
+		return false, false
 	}
-	return true
 }

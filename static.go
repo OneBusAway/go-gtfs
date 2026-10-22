@@ -1859,6 +1859,22 @@ func faresByID(fares []FareAttribute) map[string]*FareAttribute {
 	return idToFare
 }
 
+func riderCategoriesByID(categories []RiderCategory) map[string]*RiderCategory {
+	idToCategory := make(map[string]*RiderCategory, len(categories))
+	for i := range categories {
+		idToCategory[categories[i].Id] = &categories[i]
+	}
+	return idToCategory
+}
+
+func fareMediaByID(media []FareMedia) map[string]*FareMedia {
+	idToMedia := make(map[string]*FareMedia, len(media))
+	for i := range media {
+		idToMedia[media[i].Id] = &media[i]
+	}
+	return idToMedia
+}
+
 func areasByID(areas []Area) map[string]*Area {
 	idToArea := make(map[string]*Area, len(areas))
 	for i := range areas {

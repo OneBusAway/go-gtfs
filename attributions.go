@@ -2,7 +2,6 @@ package gtfs
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/OneBusAway/go-gtfs/csv"
 	"github.com/OneBusAway/go-gtfs/warnings"
@@ -77,7 +76,7 @@ rows:
 			{"is_operator", isOperatorColumn.Read(), &a.IsOperator},
 			{"is_authority", isAuthorityColumn.Read(), &a.IsAuthority},
 		} {
-			v, ok := parseRole(role.raw)
+			v, ok := parseZeroOrOne(role.raw)
 			if !ok {
 				invalid(a.Id, "invalid %s %q", role.column, role.raw)
 				continue rows
@@ -124,17 +123,4 @@ rows:
 		attributions = append(attributions, a)
 	}
 	return attributions, w
-}
-
-// parseRole reads an is_producer, is_operator or is_authority value, ignoring
-// surrounding whitespace. Empty means 0. ok is false for any other value.
-func parseRole(s string) (v, ok bool) {
-	switch strings.TrimSpace(s) {
-	case "", "0":
-		return false, true
-	case "1":
-		return true, true
-	default:
-		return false, false
-	}
 }
