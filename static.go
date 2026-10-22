@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -23,6 +24,7 @@ import (
 type Static struct {
 	Agencies  []Agency
 	Routes    []Route
+	Networks  []Network
 	Stops     []Stop
 	Levels    []Level
 	Pathways  []Pathway
@@ -77,6 +79,8 @@ type Route struct {
 	SortOrder         *int32
 	ContinuousPickup  PickupDropOffPolicy
 	ContinuousDropOff PickupDropOffPolicy
+	// Network is nil when the route is in no network.
+	Network *Network
 }
 
 type Stop struct {
@@ -399,6 +403,8 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 	// is absent.
 	var stopIdToStop map[string]*Stop
 	var routeIdToRoute map[string]*Route
+	// GTFS forbids routes.txt network_id when either network file exists.
+	networkFilesPresent := !isAbsentOrEmpty(fileNameToFile[constants.NetworksFile]) || !isAbsentOrEmpty(fileNameToFile[constants.RouteNetworksFile])
 	timezone := time.UTC
 	for _, table := range []struct {
 		File        constants.StaticFile
@@ -439,12 +445,38 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 			Discard: func() {},
 		},
 		{
-			File: "routes.txt",
+			File: constants.RoutesFile,
 			Action: func(file *csv.File) (w []warnings.StaticWarning) {
-				result.Routes = parseRoutes(file, result.Agencies)
+				var networkIDs []string
+				result.Routes, networkIDs = parseRoutes(file, result.Agencies)
 				routeIdToRoute = routesByID(result.Routes)
+				if !networkFilesPresent {
+					result.Networks = networksFromRoutes(result.Routes, networkIDs)
+				} else if slices.ContainsFunc(networkIDs, func(id string) bool { return id != "" }) {
+					w = append(w, warnings.NewFileWarning(constants.RoutesFile, warnings.NetworksDefinedTwice{}))
+				}
 				return
 			},
+		},
+		{
+			File: constants.NetworksFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				result.Networks, w = parseNetworks(file)
+				return
+			},
+			Optional: true,
+			// Each row stands alone, so rows read before the error are kept.
+			Discard: func() {},
+		},
+		{
+			File: constants.RouteNetworksFile,
+			Action: func(file *csv.File) []warnings.StaticWarning {
+				return parseRouteNetworks(file, result.Networks, routeIdToRoute)
+			},
+			Optional: true,
+			// Each row stands alone, so assignments made before the error
+			// are kept.
+			Discard: func() {},
 		},
 		{
 			File: constants.LevelsFile,
@@ -739,7 +771,9 @@ func parseAgencies(csv *csv.File) ([]Agency, []warnings.StaticWarning) {
 	return agencies, w
 }
 
-func parseRoutes(csv *csv.File, agencies []Agency) []Route {
+// parseRoutes reads routes.txt. networkIDs holds each returned route's
+// network_id, or is nil when routes.txt has no network_id column.
+func parseRoutes(csv *csv.File, agencies []Agency) (routes []Route, networkIDs []string) {
 	idColumn := csv.RequiredColumn("route_id")
 	agencyIDColumn := csv.OptionalColumn("agency_id")
 	colorColumn := csv.OptionalColumn("route_color")
@@ -752,14 +786,14 @@ func parseRoutes(csv *csv.File, agencies []Agency) []Route {
 	sortOrderColumn := csv.OptionalColumn("route_sort_order")
 	continuousPickupColumn := csv.OptionalColumn("continuous_pickup")
 	continuousDropOffColumn := csv.OptionalColumn("continuous_drop_off")
+	networkIDColumn := csv.OptionalColumn("network_id")
 
 	if err := csv.MissingRequiredColumns(); err != nil {
 		fmt.Println(err)
-		return nil
+		return nil, nil
 	}
 
 	agencyIdToAgency := agenciesByID(agencies)
-	var routes []Route
 	for csv.NextRow() {
 		routeID := idColumn.Read()
 		agencyID := agencyIDColumn.Read()
@@ -796,8 +830,11 @@ func parseRoutes(csv *csv.File, agencies []Agency) []Route {
 			continue
 		}
 		routes = append(routes, route)
+		if networkIDColumn.Exists() {
+			networkIDs = append(networkIDs, networkIDColumn.Read())
+		}
 	}
-	return routes
+	return routes, networkIDs
 }
 
 func parseRouteSortOrder(raw string) *int32 {
@@ -1709,6 +1746,14 @@ func agenciesByID(agencies []Agency) map[string]*Agency {
 		}
 	}
 	return idToAgency
+}
+
+func networksByID(networks []Network) map[string]*Network {
+	idToNetwork := make(map[string]*Network, len(networks))
+	for i := range networks {
+		idToNetwork[networks[i].Id] = &networks[i]
+	}
+	return idToNetwork
 }
 
 func levelsByID(levels []Level) map[string]*Level {
