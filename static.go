@@ -429,11 +429,12 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 	var routeIdToRoute map[string]*Route
 	// GTFS forbids routes.txt network_id when either network file exists.
 	networkFilesPresent := !isAbsentOrEmpty(fileNameToFile[constants.NetworksFile]) || !isAbsentOrEmpty(fileNameToFile[constants.RouteNetworksFile])
-	// Timeframe groups that lost a row, and whether timeframes.txt could not
-	// be read; both affect which fare leg rules can be kept.
+	// Timeframe groups that lost a row, which leg rules naming them cannot
+	// be kept without.
 	var lostTimeframes map[string]bool
-	timeframesUnreadable := false
-	legRulesUnreadable := false
+	// Set when timeframes.txt or fare_leg_rules.txt cannot be read, so the
+	// leg rules, and the transfer rules that refer to them, are dropped.
+	legRulesLost := false
 	// Set when a Fares V1 file cannot be read or lacks a required column, so
 	// that both are dropped.
 	faresV1Unreadable := false
@@ -670,7 +671,7 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 			Optional: true,
 			Discard: func() {
 				result.Timeframes = nil
-				timeframesUnreadable = true
+				legRulesLost = true
 			},
 		},
 		{
@@ -678,7 +679,7 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 			Action: func(file *csv.File) (w []warnings.StaticWarning) {
 				// Without the timeframes, rules naming them would be
 				// skipped and the rest would match more than they should.
-				if !timeframesUnreadable {
+				if !legRulesLost {
 					result.FareLegRules, w = parseFareLegRules(file, result.Networks, result.Areas, result.Timeframes, lostTimeframes, result.FareProducts)
 				}
 				return
@@ -686,7 +687,7 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 			Optional: true,
 			Discard: func() {
 				result.FareLegRules = nil
-				legRulesUnreadable = true
+				legRulesLost = true
 			},
 		},
 		{
@@ -703,7 +704,7 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 			Action: func(file *csv.File) (w []warnings.StaticWarning) {
 				// An empty leg group matches the groups the other rules
 				// leave out, so these cannot be read without the leg rules.
-				if !timeframesUnreadable && !legRulesUnreadable {
+				if !legRulesLost {
 					result.FareTransferRules, w = parseFareTransferRules(file, result.FareLegRules, result.FareProducts)
 				}
 				return
@@ -1919,6 +1920,22 @@ func faresByID(fares []FareAttribute) map[string]*FareAttribute {
 		idToFare[fares[i].Id] = &fares[i]
 	}
 	return idToFare
+}
+
+// isStopOrStation reports whether s is a stop (location_type 0) or a
+// station.
+func isStopOrStation(s *Stop) bool {
+	return s.Type == StopType_Stop || s.Type == StopType_Station
+}
+
+// parseEnum reads an integer enum, ignoring surrounding whitespace. ok is
+// false unless it is in [lo, hi].
+func parseEnum[T ~int32](s string, lo, hi T) (v T, ok bool) {
+	i := parseInt32(strings.TrimSpace(s))
+	if i == nil || T(*i) < lo || T(*i) > hi {
+		return 0, false
+	}
+	return T(*i), true
 }
 
 // idSet returns the set of the items' IDs, for references to IDs that several

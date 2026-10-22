@@ -119,8 +119,6 @@ func parseFareLegJoinRules(csv *csv.File, networks []Network, stopIdToStop map[s
 			FromStop:    stopIdToStop[k.fromStop],
 			ToStop:      stopIdToStop[k.toStop],
 		}
-		// GTFS allows a stop (location_type 0) or a station.
-		notStopOrStation := func(s *Stop) bool { return s != nil && s.Type != StopType_Stop && s.Type != StopType_Station }
 		missing := csv.MissingRowKeys()
 		reason := ""
 		switch {
@@ -136,9 +134,9 @@ func parseFareLegJoinRules(csv *csv.File, networks []Network, stopIdToStop map[s
 			reason = fmt.Sprintf("unknown from_stop_id %q", k.fromStop)
 		case k.toStop != "" && r.ToStop == nil:
 			reason = fmt.Sprintf("unknown to_stop_id %q", k.toStop)
-		case notStopOrStation(r.FromStop):
+		case r.FromStop != nil && !isStopOrStation(r.FromStop):
 			reason = fmt.Sprintf("from_stop_id %q is not a stop or station", k.fromStop)
-		case notStopOrStation(r.ToStop):
+		case r.ToStop != nil && !isStopOrStation(r.ToStop):
 			reason = fmt.Sprintf("to_stop_id %q is not a stop or station", k.toStop)
 		case seen[k]:
 			reason = "duplicate row"
@@ -186,9 +184,10 @@ func parseFareTransferRules(csv *csv.File, legRules []FareLegRule, products []Fa
 		rawCount := strings.TrimSpace(transferCountColumn.Read())
 		rawLimit := strings.TrimSpace(durationLimitColumn.Read())
 		rawLimitType := strings.TrimSpace(durationLimitTypeColumn.Read())
-		rawTransferType := transferTypeColumn.Read()
-		transferType := parseInt32(strings.TrimSpace(rawTransferType))
-		limitType := parseInt32(rawLimitType)
+		rawTransferType := strings.TrimSpace(transferTypeColumn.Read())
+		var transferTypeOK, limitTypeOK bool
+		r.FareTransferType, transferTypeOK = parseEnum(rawTransferType, FareTransferType_APlusAB, FareTransferType_AB)
+		r.DurationLimitType, limitTypeOK = parseEnum(rawLimitType, DurationLimitType_DepartureToArrival, DurationLimitType_ArrivalToArrival)
 		r.TransferCount = parseInt32(rawCount)
 		r.DurationLimit = parseInt32(rawLimit)
 		sameGroup := r.FromLegGroupId != "" && r.FromLegGroupId == r.ToLegGroupId
@@ -198,7 +197,7 @@ func parseFareTransferRules(csv *csv.File, legRules []FareLegRule, products []Fa
 		switch {
 		case len(missing) > 0:
 			reason = fmt.Sprintf("missing values %s", missing)
-		case transferType == nil || *transferType < int32(FareTransferType_APlusAB) || *transferType > int32(FareTransferType_AB):
+		case !transferTypeOK:
 			reason = fmt.Sprintf("invalid fare_transfer_type %q", rawTransferType)
 		case r.FromLegGroupId != "" && !legGroups[r.FromLegGroupId]:
 			reason = fmt.Sprintf("unknown from_leg_group_id %q", r.FromLegGroupId)
@@ -216,15 +215,11 @@ func parseFareTransferRules(csv *csv.File, legRules []FareLegRule, products []Fa
 			reason = "duration_limit_type must be set exactly when duration_limit is"
 		case rawLimit != "" && (r.DurationLimit == nil || *r.DurationLimit <= 0):
 			reason = fmt.Sprintf("invalid duration_limit %q", rawLimit)
-		case rawLimitType != "" && (limitType == nil || *limitType < int32(DurationLimitType_DepartureToArrival) || *limitType > int32(DurationLimitType_ArrivalToArrival)):
+		case rawLimitType != "" && !limitTypeOK:
 			reason = fmt.Sprintf("invalid duration_limit_type %q", rawLimitType)
 		case seen[k]:
 			reason = "duplicate from_leg_group_id, to_leg_group_id, fare_product_id, transfer_count and duration_limit"
 		default:
-			r.FareTransferType = FareTransferType(*transferType)
-			if limitType != nil {
-				r.DurationLimitType = DurationLimitType(*limitType)
-			}
 			seen[k] = true
 			rules = append(rules, r)
 			continue
