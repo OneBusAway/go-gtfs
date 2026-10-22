@@ -94,6 +94,8 @@ func (stop *Stop) Root() *Stop {
 }
 
 type Transfer struct {
+	// From and To are nil when a linked-trip transfer (TransferType_InSeat
+	// or TransferType_InSeatNotAllowed) omits from_stop_id or to_stop_id.
 	From            *Stop
 	To              *Stop
 	Type            TransferType
