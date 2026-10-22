@@ -901,6 +901,26 @@ func parseTransfers(csv *csv.File, stops []Stop, routes []Route, tripIdToTrip ma
 
 	var transfers []Transfer
 	var w []warnings.StaticWarning
+	// checkTripOnRoute warns if a trip and a route are both given on one side
+	// of the transfer but the trip runs on another route. GTFS requires the
+	// trip to belong to the route.
+	checkTripOnRoute := func(tripColumn string, trip *ScheduledTrip, route *Route) {
+		if trip != nil && route != nil && trip.Route.Id != route.Id {
+			w = append(w, warnings.NewStaticWarning(csv, warnings.TransferTripNotOnRoute{
+				TripColumn: tripColumn,
+				TripID:     trip.ID,
+				RouteID:    route.Id,
+			}))
+		}
+	}
+	// checkLinkedTripStop warns if a linked-trip transfer names something other
+	// than a stop (location_type 0). Linked trips run on one vehicle, so GTFS
+	// never allows a station here.
+	checkLinkedTripStop := func(column string, stop *Stop) {
+		if stop != nil && stop.Type != StopType_Stop {
+			w = append(w, warnings.NewStaticWarning(csv, warnings.TransferStopNotAllowed{Column: column, StopID: stop.Id}))
+		}
+	}
 	for csv.NextRow() {
 		transferType := parseTransferType(typeColumn.Read())
 		linkedTrips := transferType == TransferType_InSeat || transferType == TransferType_InSeatNotAllowed
@@ -941,23 +961,8 @@ func parseTransfers(csv *csv.File, stops []Stop, routes []Route, tripIdToTrip ma
 		if len(w) > warningsBefore {
 			continue
 		}
-		// GTFS requires a trip to belong to the route given beside it.
-		for _, side := range []struct {
-			tripColumn string
-			trip       *ScheduledTrip
-			route      *Route
-		}{
-			{"from_trip_id", fromTrip, fromRoute},
-			{"to_trip_id", toTrip, toRoute},
-		} {
-			if side.trip != nil && side.route != nil && side.trip.Route.Id != side.route.Id {
-				w = append(w, warnings.NewStaticWarning(csv, warnings.TransferTripNotOnRoute{
-					TripColumn: side.tripColumn,
-					TripID:     side.trip.ID,
-					RouteID:    side.route.Id,
-				}))
-			}
-		}
+		checkTripOnRoute("from_trip_id", fromTrip, fromRoute)
+		checkTripOnRoute("to_trip_id", toTrip, toRoute)
 		if len(w) > warningsBefore {
 			continue
 		}
@@ -975,19 +980,8 @@ func parseTransfers(csv *csv.File, stops []Stop, routes []Route, tripIdToTrip ma
 			continue
 		}
 		if linkedTrips {
-			// Linked trips run on one vehicle, so GTFS only allows a stop
-			// (location_type 0) here, never a station.
-			for _, ref := range []struct {
-				column string
-				stop   *Stop
-			}{
-				{"from_stop_id", fromStop},
-				{"to_stop_id", toStop},
-			} {
-				if ref.stop != nil && ref.stop.Type != StopType_Stop {
-					w = append(w, warnings.NewStaticWarning(csv, warnings.TransferStopNotAllowed{Column: ref.column, StopID: ref.stop.Id}))
-				}
-			}
+			checkLinkedTripStop("from_stop_id", fromStop)
+			checkLinkedTripStop("to_stop_id", toStop)
 			if len(w) > warningsBefore {
 				continue
 			}
