@@ -100,6 +100,17 @@ func TestParseLevels(t *testing.T) {
 			},
 		},
 		{
+			desc:           "non-finite level_index skips the level",
+			stops:          defaultStops,
+			levels:         []string{"level_id,level_index", "nan,NaN", "inf,-Inf", "street,0"},
+			wantLevels:     []Level{{Id: "street", Index: 0}},
+			wantStopLevels: map[string]string{"stop_id": ""},
+			wantWarnings: []warnings.StaticWarningKind{
+				warnings.LevelInvalid{LevelID: "nan", Reason: `invalid level_index "NaN"`},
+				warnings.LevelInvalid{LevelID: "inf", Reason: `invalid level_index "-Inf"`},
+			},
+		},
+		{
 			desc:           "empty level_index skips the level",
 			stops:          defaultStops,
 			levels:         []string{"level_id,level_index", "street,"},
