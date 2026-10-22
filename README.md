@@ -97,7 +97,7 @@ Below is a list of the GTFS schedule files and whether they are currently suppor
 | [locations.geojson](https://gtfs.org/documentation/schedule/reference/#locationsgeojson)               | ✅        | Optional                | Polygon and MultiPolygon only                               |
 | [booking_rules.txt](https://gtfs.org/documentation/schedule/reference/#booking_rulestxt)               | ✅        | Optional                |                                                             |
 | [translations.txt](https://gtfs.org/documentation/schedule/reference/#translationstxt)                 | ❌        | Optional                |                                                             |
-| [feed_info.txt](https://gtfs.org/documentation/schedule/reference/#feed_infotxt)                       | ❌        | Conditionally Required  |                                                             |
+| [feed_info.txt](https://gtfs.org/documentation/schedule/reference/#feed_infotxt)                       | ✅        | Conditionally Required  |                                                             |
 | [attributions.txt](https://gtfs.org/documentation/schedule/reference/#attributionstxt)                 | ❌        | Optional                |                                                             |
 
 ## GTFS-Flex and upgrading

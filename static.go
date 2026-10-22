@@ -35,6 +35,10 @@ type Static struct {
 	// BookingRules is nil when booking_rules.txt is absent.
 	BookingRules []BookingRule
 
+	// FeedInfo is nil when the feed has no feed_info.txt, or when that file
+	// lacks a required column or has no data row that can be read.
+	FeedInfo *FeedInfo
+
 	// Warnings raised during GTFS static parsing.
 	Warnings []warnings.StaticWarning
 }
@@ -391,6 +395,12 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 		PostProcess func()
 		Optional    bool
 		Skip        bool
+		// Discard, when set, makes an unreadable file a warning rather than
+		// an error. It runs when reading stops at a malformed row, and must
+		// undo whatever Action stored that the missing rows make unreliable.
+		// Use it for files that only add to the feed, whose problems should
+		// not stop the rest from parsing.
+		Discard func()
 	}{
 		{
 			File: constants.AgencyFile,
@@ -405,6 +415,17 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 				}
 				return
 			},
+		},
+		{
+			File: constants.FeedInfoFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				result.FeedInfo, w = parseFeedInfo(file, timezone)
+				return
+			},
+			Optional: true,
+			// Only the first row is used, and any row read before the
+			// error parsed cleanly, so there is nothing to undo.
+			Discard: func() {},
 		},
 		{
 			File: "routes.txt",
@@ -544,14 +565,23 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 		}
 		file, err := openCsvFile(table.File, zipFile)
 		if err != nil {
+			if table.Discard != nil {
+				result.Warnings = append(result.Warnings, warnings.NewFileWarning(table.File, warnings.FileUnreadable{Reason: err.Error()}))
+				table.PostProcess()
+				continue
+			}
 			return nil, fmt.Errorf("failed to read %q: %w", table.File, err)
 		}
 		w := table.Action(file)
+		if err := file.Close(); err != nil {
+			if table.Discard == nil {
+				return nil, fmt.Errorf("failed to read %q: %w", table.File, err)
+			}
+			table.Discard()
+			w = append(w, warnings.NewFileWarning(table.File, warnings.FileUnreadable{Reason: err.Error()}))
+		}
 		table.PostProcess()
 		result.Warnings = append(result.Warnings, w...)
-		if err := file.Close(); err != nil {
-			return nil, fmt.Errorf("failed to read %q: %w", table.File, err)
-		}
 	}
 	return result, nil
 }

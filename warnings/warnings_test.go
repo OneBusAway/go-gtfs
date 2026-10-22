@@ -29,6 +29,10 @@ func TestFlexWarningKindsHaveMessages(t *testing.T) {
 		{TransferInvalidType{Value: "6"}, `transfer has invalid transfer_type "6"`},
 		{TransferMissingStop{Column: "from_stop_id"}, "transfer is missing from_stop_id"},
 		{StopInvalidLocationType{StopID: "s", Value: "5"}, `stop "s" has invalid location_type "5"; read as a stop`},
+		{FileUnreadable{Reason: "r"}, "file could not be fully read: r"},
+		{FeedInfoExtraRow{}, "feed_info.txt has more than one row; only the first is read"},
+		{FeedInfoMissingValues{Columns: []string{"feed_lang"}}, "feed info is missing values [feed_lang]"},
+		{FeedInfoInvalidDate{Column: "feed_end_date", Value: "x"}, `feed info feed_end_date "x" is not a YYYYMMDD date`},
 	} {
 		if got := tc.kind.Error(); got != tc.want {
 			t.Errorf("%T.Error() = %q, want %q", tc.kind, got, tc.want)

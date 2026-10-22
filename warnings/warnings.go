@@ -82,6 +82,47 @@ func (w AgencyMissingValues) Error() string {
 	return fmt.Sprintf("agency %q is missing values %s", w.AgencyID, w.Columns)
 }
 
+// FileUnreadable is raised when an optional file that only adds to the feed,
+// such as feed_info.txt, cannot be read as CSV, for example because a row has
+// the wrong number of fields. Rows after the error are ignored, and the rest
+// of the feed is parsed as usual.
+type FileUnreadable struct {
+	Reason string
+}
+
+func (w FileUnreadable) Error() string {
+	return fmt.Sprintf("file could not be fully read: %s", w.Reason)
+}
+
+// FeedInfoExtraRow is raised for each feed_info.txt row after the first.
+// GTFS allows one row. The extra rows are ignored.
+type FeedInfoExtraRow struct{}
+
+func (w FeedInfoExtraRow) Error() string {
+	return "feed_info.txt has more than one row; only the first is read"
+}
+
+// FeedInfoMissingValues is raised when the feed_info.txt row leaves required
+// values empty. The row is still read.
+type FeedInfoMissingValues struct {
+	Columns []string
+}
+
+func (w FeedInfoMissingValues) Error() string {
+	return fmt.Sprintf("feed info is missing values %s", w.Columns)
+}
+
+// FeedInfoInvalidDate is raised when feed_start_date or feed_end_date is not
+// a YYYYMMDD date. The date is read as unset.
+type FeedInfoInvalidDate struct {
+	Column string
+	Value  string
+}
+
+func (w FeedInfoInvalidDate) Error() string {
+	return fmt.Sprintf("feed info %s %q is not a YYYYMMDD date", w.Column, w.Value)
+}
+
 // StopTimeInvalidReference is raised when a stop_times.txt row does not
 // reference exactly one of stop_id, location_id and location_group_id, or
 // references an id (including a booking rule id) that does not resolve.
