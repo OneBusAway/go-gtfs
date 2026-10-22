@@ -171,16 +171,19 @@ func (w TransferUnknownReference) Error() string {
 	return fmt.Sprintf("transfer references unknown %s %q", w.Column, w.ID)
 }
 
-// TransferStopNotAllowed is raised when a linked-trip transfer (transfer_type 4
-// or 5) names a from_stop_id or to_stop_id that is not a stop
-// (location_type 0), such as a station. GTFS forbids this. The row is skipped.
+// TransferStopNotAllowed is raised when a transfers.txt row names a
+// from_stop_id or to_stop_id whose location_type the transfer does not allow.
+// GTFS allows a stop or a station (location_type 0 or 1), and only a stop for
+// linked trips (transfer_type 4 or 5). Allowed describes what the row needed.
+// The row is skipped.
 type TransferStopNotAllowed struct {
-	Column string
-	StopID string
+	Column  string
+	StopID  string
+	Allowed string
 }
 
 func (w TransferStopNotAllowed) Error() string {
-	return fmt.Sprintf("linked-trip transfer %s %q is not a stop (location_type 0)", w.Column, w.StopID)
+	return fmt.Sprintf("transfer %s %q is not %s", w.Column, w.StopID, w.Allowed)
 }
 
 // TransferTripNotOnRoute is raised when a transfers.txt row sets a trip and a

@@ -912,12 +912,16 @@ func parseTransfers(csv *csv.File, stops []Stop, routes []Route, tripIdToTrip ma
 			}))
 		}
 	}
-	// checkLinkedTripStop warns if a linked-trip transfer names something other
-	// than a stop (location_type 0). Linked trips run on one vehicle, so GTFS
-	// never allows a station here.
-	checkLinkedTripStop := func(column string, stop *Stop) {
-		if stop != nil && stop.Type != StopType_Stop {
-			w = append(w, warnings.NewStaticWarning(csv, warnings.TransferStopNotAllowed{Column: column, StopID: stop.Id}))
+	// checkStopType warns if a transfer names a stop whose location_type GTFS
+	// does not allow: only a stop or a station, and only a stop for linked
+	// trips, which run on one vehicle.
+	checkStopType := func(column string, stop *Stop, linkedTrips bool) {
+		switch {
+		case stop == nil, stop.Type == StopType_Stop:
+		case linkedTrips:
+			w = append(w, warnings.NewStaticWarning(csv, warnings.TransferStopNotAllowed{Column: column, StopID: stop.Id, Allowed: "a stop (location_type 0)"}))
+		case stop.Type != StopType_Station:
+			w = append(w, warnings.NewStaticWarning(csv, warnings.TransferStopNotAllowed{Column: column, StopID: stop.Id, Allowed: "a stop or station (location_type 0 or 1)"}))
 		}
 	}
 	for csv.NextRow() {
@@ -978,12 +982,10 @@ func parseTransfers(csv *csv.File, stops []Stop, routes []Route, tripIdToTrip ma
 		if !ok {
 			continue
 		}
-		if linkedTrips {
-			checkLinkedTripStop("from_stop_id", fromStop)
-			checkLinkedTripStop("to_stop_id", toStop)
-			if len(w) > warningsBefore {
-				continue
-			}
+		checkStopType("from_stop_id", fromStop, linkedTrips)
+		checkStopType("to_stop_id", toStop, linkedTrips)
+		if len(w) > warningsBefore {
+			continue
 		}
 		transfers = append(transfers, Transfer{
 			From:            fromStop,

@@ -9,7 +9,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-// parseTransfersFeed parses a feed with stops S1, S2 and station ST, routes R1
+// parseTransfersFeed parses a feed with stops S1, S2, station ST and its
+// entrance E, routes R1
 // and R2, and trips T1 (on R1) and T2 (on R2), plus the given transfers.txt.
 func parseTransfersFeed(t *testing.T, transfers ...string) *Static {
 	t.Helper()
@@ -28,6 +29,7 @@ func parseTransfersFeed(t *testing.T, transfers ...string) *Static {
 		"S1,0,ST",
 		"S2,0,ST",
 		"ST,1,",
+		"E,2,ST",
 	).add(
 		"calendar.txt",
 		"service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date",
@@ -199,12 +201,12 @@ func TestParseTransfers(t *testing.T) {
 		{
 			desc:         "in-seat transfer from a station",
 			transfers:    []string{header, "ST,S2,,,T1,T2,4,"},
-			wantWarnings: []warnings.StaticWarningKind{warnings.TransferStopNotAllowed{Column: "from_stop_id", StopID: "ST"}},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferStopNotAllowed{Column: "from_stop_id", StopID: "ST", Allowed: "a stop (location_type 0)"}},
 		},
 		{
 			desc:         "in-seat transfer not allowed to a station",
 			transfers:    []string{header, "S1,ST,,,T1,T2,5,"},
-			wantWarnings: []warnings.StaticWarningKind{warnings.TransferStopNotAllowed{Column: "to_stop_id", StopID: "ST"}},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferStopNotAllowed{Column: "to_stop_id", StopID: "ST", Allowed: "a stop (location_type 0)"}},
 		},
 		{
 			desc:         "transfer whose from_trip_id is not on from_route_id",
@@ -235,6 +237,26 @@ func TestParseTransfers(t *testing.T) {
 			desc:         "in-seat transfer with unknown to_stop_id",
 			transfers:    []string{header, "S1,NOPE,,,T1,T2,4,"},
 			wantWarnings: []warnings.StaticWarningKind{warnings.TransferUnknownReference{Column: "to_stop_id", ID: "NOPE"}},
+		},
+		{
+			desc:         "transfer from an entrance",
+			transfers:    []string{header, "E,S1,,,,,2,60"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferStopNotAllowed{Column: "from_stop_id", StopID: "E", Allowed: "a stop or station (location_type 0 or 1)"}},
+		},
+		{
+			desc:         "timed transfer to an entrance",
+			transfers:    []string{header, "S1,E,,,,,1,"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferStopNotAllowed{Column: "to_stop_id", StopID: "E", Allowed: "a stop or station (location_type 0 or 1)"}},
+		},
+		{
+			desc:         "in-seat transfer from an entrance",
+			transfers:    []string{header, "E,S2,,,T1,T2,4,"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferStopNotAllowed{Column: "from_stop_id", StopID: "E", Allowed: "a stop (location_type 0)"}},
+		},
+		{
+			desc:        "transfer between a station and a stop",
+			transfers:   []string{header, "ST,S1,,,,,2,60"},
+			wantSummary: []string{"from=ST to=S1 fromRoute= toRoute= fromTrip= toTrip= type=REQUIRES_TIME min=60"},
 		},
 		{
 			desc:      "minimum time transfer without from_stop_id is skipped",

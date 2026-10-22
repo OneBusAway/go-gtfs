@@ -129,8 +129,9 @@ earlier versions should note:
   `Transfer.To` may be nil. Check them before use.
 - A linked-trip row without a known `from_trip_id` and `to_trip_id` is skipped with a
   `TransferMissingTrip` or `TransferUnknownReference` warning.
-- A linked-trip row whose `from_stop_id` or `to_stop_id` is not a stop (`location_type` 0),
-  such as a station, is skipped with a `TransferStopNotAllowed` warning.
+- A row whose `from_stop_id` or `to_stop_id` is not a stop or station (`location_type` 0 or 1),
+  such as an entrance, is skipped with a `TransferStopNotAllowed` warning. For linked trips,
+  only a stop (`location_type` 0) is allowed.
 - A row that sets both a trip and a route on the same side (`from_` or `to_`) is skipped with a
   `TransferTripNotOnRoute` warning when the trip runs on a different route.
 - A row whose `from_stop_id` equals its `to_stop_id` is kept. Earlier versions dropped it.
