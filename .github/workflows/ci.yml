@@ -115,6 +115,8 @@ jobs:
 
       - name: Check proto/*.pb.go match the .proto sources
         run: |
+          # Delete first so a .pb.go whose .proto was removed or renamed shows up as a diff.
+          rm -f proto/*.pb.go
           buf generate
           if [ -n "$(git status --porcelain)" ]; then
             git status --short

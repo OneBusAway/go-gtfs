@@ -191,7 +191,7 @@ TBD
 ## Regenerating the protobuf code
 
 The `proto` subpackage is generated from the `.proto` files next to it. After editing a
-`.proto` file, install [buf](https://buf.build/docs/cli/installation/) and run:
+`.proto` file, install [buf](https://buf.build/docs/cli/installation/) (CI uses v1.73.0) and run:
 
 ```sh
 buf generate
