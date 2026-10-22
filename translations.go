@@ -58,7 +58,7 @@ func parseTranslations(csv *csv.File) ([]Translation, []warnings.StaticWarning) 
 		var reason string
 		switch missingKeys := csv.MissingRowKeys(); {
 		case len(missingKeys) > 0:
-			reason = "missing values " + fmt.Sprint(missingKeys)
+			reason = fmt.Sprintf("missing values %s", missingKeys)
 		case t.TableName == "feed_info":
 			if t.RecordId != "" || t.RecordSubId != "" || t.FieldValue != "" {
 				reason = "feed_info rows cannot set record_id, record_sub_id or field_value"
@@ -82,34 +82,34 @@ func parseTranslations(csv *csv.File) ([]Translation, []warnings.StaticWarning) 
 		translations = append(translations, t)
 	}
 	// Drop the slack append left, which on a large file is many megabytes.
-	return slices.Clip(slices.Clone(translations)), w
+	return slices.Clone(translations), w
 }
 
 // Translator looks up translations by the record and value they apply to.
 type Translator struct {
-	byRecord map[translationKey]string
-	byValue  map[translationKey]string
+	translations map[translationKey]string
 }
 
+// translationKey selects by record IDs, or by a non-empty value with empty
+// IDs, so the two kinds of key never collide.
 type translationKey struct {
-	table, field, language string
-	// recordID and recordSubID, or value, depending on the map.
+	table, field, language       string
 	recordID, recordSubID, value string
 }
 
 // NewTranslator indexes translations for lookup. If two translations select
 // the same record or value, the first is used.
 func NewTranslator(translations []Translation) *Translator {
-	t := &Translator{byRecord: map[translationKey]string{}, byValue: map[translationKey]string{}}
+	t := &Translator{translations: make(map[translationKey]string, len(translations))}
 	for _, tr := range translations {
-		m, key := t.byRecord, translationKey{table: tr.TableName, field: tr.FieldName, language: tr.Language}
+		key := translationKey{table: tr.TableName, field: tr.FieldName, language: tr.Language}
 		if tr.FieldValue != "" {
-			m, key.value = t.byValue, tr.FieldValue
+			key.value = tr.FieldValue
 		} else {
 			key.recordID, key.recordSubID = tr.RecordId, tr.RecordSubId
 		}
-		if _, ok := m[key]; !ok {
-			m[key] = tr.Translation
+		if _, ok := t.translations[key]; !ok {
+			t.translations[key] = tr.Translation
 		}
 	}
 	return t
@@ -122,12 +122,12 @@ func NewTranslator(translations []Translation) *Translator {
 // record ID takes precedence over one selected by value, as GTFS requires.
 func (t *Translator) Translate(table, field, language, recordID, recordSubID, value string) (string, bool) {
 	key := translationKey{table: table, field: field, language: language, recordID: recordID, recordSubID: recordSubID}
-	if s, ok := t.byRecord[key]; ok {
+	if s, ok := t.translations[key]; ok {
 		return s, true
 	}
 	if value == "" {
 		return "", false
 	}
-	s, ok := t.byValue[translationKey{table: table, field: field, language: language, value: value}]
+	s, ok := t.translations[translationKey{table: table, field: field, language: language, value: value}]
 	return s, ok
 }

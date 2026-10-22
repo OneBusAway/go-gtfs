@@ -12,14 +12,11 @@ import (
 
 const translationsHeader = "table_name,field_name,language,translation,record_id,record_sub_id,field_value"
 
-// parseTranslationsFeed parses the default feed plus feed_info.txt, unless
-// withoutFeedInfo, and translations.txt if lines are given.
-func parseTranslationsFeed(t *testing.T, withoutFeedInfo bool, lines ...string) *Static {
+// parseTranslationsFeed parses the default feed plus feed_info.txt and, if
+// lines are given, translations.txt.
+func parseTranslationsFeed(t *testing.T, lines ...string) *Static {
 	t.Helper()
-	b := newZipBuilderWithDefaults()
-	if !withoutFeedInfo {
-		b.add("feed_info.txt", "feed_publisher_name,feed_publisher_url,feed_lang", "Metro,https://example.com,fi")
-	}
+	b := newZipBuilderWithDefaults().add("feed_info.txt", "feed_publisher_name,feed_publisher_url,feed_lang", "Metro,https://example.com,fi")
 	if lines != nil {
 		b.add("translations.txt", lines...)
 	}
@@ -122,7 +119,7 @@ func TestParseTranslations(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			static := parseTranslationsFeed(t, false, tc.lines...)
+			static := parseTranslationsFeed(t, tc.lines...)
 			if diff := cmp.Diff(static.Translations, tc.want); diff != "" {
 				t.Errorf("Translations mismatch (-got +want):\n%s", diff)
 			}
@@ -134,7 +131,11 @@ func TestParseTranslations(t *testing.T) {
 }
 
 func TestParseTranslations_WithoutFeedInfo(t *testing.T) {
-	static := parseTranslationsFeed(t, true, translationsHeader, "stops,stop_name,sv,Kyrkan,S2,,")
+	feed := newZipBuilderWithDefaults().add("translations.txt", translationsHeader, "stops,stop_name,sv,Kyrkan,S2,,").build()
+	static, err := ParseStatic(feed, ParseStaticOptions{})
+	if err != nil {
+		t.Fatalf("ParseStatic: %s", err)
+	}
 	if len(static.Translations) != 1 {
 		t.Errorf("got %d translations, want 1", len(static.Translations))
 	}
@@ -180,7 +181,7 @@ func TestTranslator(t *testing.T) {
 // Large feeds repeat translation values across many rows, for example the
 // same headsign for every trip that uses it, so equal values share storage.
 func TestParseTranslations_RepeatedValuesShareStorage(t *testing.T) {
-	static := parseTranslationsFeed(t, false, translationsHeader,
+	static := parseTranslationsFeed(t, translationsHeader,
 		"stop_times,stop_headsign,sv,Centrum,T1,3,",
 		"stop_times,stop_headsign,sv,Centrum,T1,4,",
 		"stop_times,stop_headsign,sv,Centrum,T2,3,",
