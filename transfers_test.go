@@ -172,6 +172,52 @@ func TestParseTransfers(t *testing.T) {
 			wantSummary: []string{"from=S1 to=S1 fromRoute= toRoute= fromTrip=T1 toTrip=T2 type=NOT_POSSIBLE min=<nil>"},
 		},
 		{
+			desc:        "transfer between routes and trips",
+			transfers:   []string{header, "S1,S2,R1,R2,T1,T2,2,120"},
+			wantSummary: []string{"from=S1 to=S2 fromRoute=R1 toRoute=R2 fromTrip=T1 toTrip=T2 type=REQUIRES_TIME min=120"},
+		},
+		{
+			desc:         "transfer with unknown from_trip_id",
+			transfers:    []string{header, "S1,S2,,,UNKNOWN,,3,"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferUnknownReference{Column: "from_trip_id", ID: "UNKNOWN"}},
+		},
+		{
+			desc:         "transfer with unknown to_trip_id",
+			transfers:    []string{header, "S1,S2,,,T1,UNKNOWN,3,"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferUnknownReference{Column: "to_trip_id", ID: "UNKNOWN"}},
+		},
+		{
+			desc:         "transfer with unknown from_route_id",
+			transfers:    []string{header, "S1,S2,UNKNOWN,R2,,,1,"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferUnknownReference{Column: "from_route_id", ID: "UNKNOWN"}},
+		},
+		{
+			desc:         "transfer with unknown to_route_id",
+			transfers:    []string{header, "S1,S2,R1,UNKNOWN,,,1,"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferUnknownReference{Column: "to_route_id", ID: "UNKNOWN"}},
+		},
+		{
+			desc:      "transfer with two unknown ids warns for each",
+			transfers: []string{header, "S1,S2,NOPE,R2,,GONE,2,60"},
+			wantWarnings: []warnings.StaticWarningKind{
+				warnings.TransferUnknownReference{Column: "from_route_id", ID: "NOPE"},
+				warnings.TransferUnknownReference{Column: "to_trip_id", ID: "GONE"},
+			},
+		},
+		{
+			desc:         "in-seat transfer with unknown from_route_id",
+			transfers:    []string{header, ",,UNKNOWN,,T1,T2,4,"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferUnknownReference{Column: "from_route_id", ID: "UNKNOWN"}},
+		},
+		{
+			desc:      "unknown id skips only its own row",
+			transfers: []string{header, "S1,S2,,,UNKNOWN,,3,", "S1,S2,,,T1,,3,"},
+			wantSummary: []string{
+				"from=S1 to=S2 fromRoute= toRoute= fromTrip=T1 toTrip= type=NOT_POSSIBLE min=<nil>",
+			},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferUnknownReference{Column: "from_trip_id", ID: "UNKNOWN"}},
+		},
+		{
 			desc:      "minimum time transfer without from_stop_id is skipped",
 			transfers: []string{header, ",S2,,,,,2,180"},
 		},

@@ -894,32 +894,41 @@ func parseTransfers(csv *csv.File, stops []Stop, routes []Route, trips []Schedul
 		transferType := parseTransferType(typeColumn.Read())
 		linkedTrips := transferType == TransferType_InSeat || transferType == TransferType_InSeatNotAllowed
 
+		fromRouteID := fromRouteIDColumn.Read()
+		toRouteID := toRouteIDColumn.Read()
 		fromTripID := fromTripIDColumn.Read()
 		toTripID := toTripIDColumn.Read()
+		fromRoute := routeIdToRoute[fromRouteID]
+		toRoute := routeIdToRoute[toRouteID]
 		fromTrip := tripIdToTrip[fromTripID]
 		toTrip := tripIdToTrip[toTripID]
-		if linkedTrips {
-			skip := false
-			for _, ref := range []struct {
-				column string
-				id     string
-				trip   *ScheduledTrip
-			}{
-				{"from_trip_id", fromTripID, fromTrip},
-				{"to_trip_id", toTripID, toTrip},
-			} {
-				switch {
-				case ref.id == "":
+		// An unknown route or trip cannot be treated as unset: that would turn
+		// the rule into a less specific one that applies to more trips.
+		skip := false
+		for _, ref := range []struct {
+			column   string
+			id       string
+			known    bool
+			required bool
+		}{
+			{"from_route_id", fromRouteID, fromRoute != nil, false},
+			{"to_route_id", toRouteID, toRoute != nil, false},
+			{"from_trip_id", fromTripID, fromTrip != nil, linkedTrips},
+			{"to_trip_id", toTripID, toTrip != nil, linkedTrips},
+		} {
+			switch {
+			case ref.id == "":
+				if ref.required {
 					w = append(w, warnings.NewStaticWarning(csv, warnings.TransferMissingTrip{Column: ref.column}))
 					skip = true
-				case ref.trip == nil:
-					w = append(w, warnings.NewStaticWarning(csv, warnings.TransferUnknownReference{Column: ref.column, ID: ref.id}))
-					skip = true
 				}
+			case !ref.known:
+				w = append(w, warnings.NewStaticWarning(csv, warnings.TransferUnknownReference{Column: ref.column, ID: ref.id}))
+				skip = true
 			}
-			if skip {
-				continue
-			}
+		}
+		if skip {
+			continue
 		}
 
 		fromStopID := fromStopIDColumn.Read()
@@ -948,8 +957,8 @@ func parseTransfers(csv *csv.File, stops []Stop, routes []Route, trips []Schedul
 			To:              toStop,
 			Type:            transferType,
 			MinTransferTime: parseInt32(transferTimeColumn.Read()),
-			FromRoute:       routeIdToRoute[fromRouteIDColumn.Read()],
-			ToRoute:         routeIdToRoute[toRouteIDColumn.Read()],
+			FromRoute:       fromRoute,
+			ToRoute:         toRoute,
 			FromTrip:        fromTrip,
 			ToTrip:          toTrip,
 		})

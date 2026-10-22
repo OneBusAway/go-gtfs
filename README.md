@@ -130,6 +130,10 @@ earlier versions should note:
 - A linked-trip row without a known `from_trip_id` and `to_trip_id` is skipped with a
   `TransferMissingTrip` or `TransferUnknownReference` warning.
 - A row whose `from_stop_id` equals its `to_stop_id` is kept. Earlier versions dropped it.
+- A row whose `from_route_id`, `to_route_id`, `from_trip_id` or `to_trip_id` is not empty
+  and not defined in `routes.txt` or `trips.txt` is skipped with a `TransferUnknownReference`
+  warning. Earlier versions kept the row with a nil route or trip, which made the rule apply
+  to every route or trip at the stop.
 
 ## Performance
 

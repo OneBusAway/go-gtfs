@@ -26,6 +26,7 @@ func TestFlexWarningKindsHaveMessages(t *testing.T) {
 		{LocationsFileInvalid{Reason: "r"}, "locations.geojson is invalid and was ignored: r"},
 		{TransferMissingTrip{Column: "from_trip_id"}, "linked-trip transfer is missing from_trip_id"},
 		{TransferUnknownReference{Column: "to_trip_id", ID: "t"}, `transfer references unknown to_trip_id "t"`},
+		{TransferUnknownReference{Column: "from_route_id", ID: "r"}, `transfer references unknown from_route_id "r"`},
 	} {
 		if got := tc.kind.Error(); got != tc.want {
 			t.Errorf("%T.Error() = %q, want %q", tc.kind, got, tc.want)
