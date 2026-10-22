@@ -137,8 +137,8 @@ func parseStopAccess(s string) (a StopAccess, ok bool) {
 
 // parsePathways reads pathways.txt. A row is skipped with a warning if a
 // required value is missing or invalid, if it names an unknown stop or one
-// GTFS forbids as a pathway end, or if its pathway_id repeats an earlier
-// one. An invalid optional value is read as unset with a warning.
+// GTFS forbids as a pathway end, if it is a bidirectional exit gate, or if
+// its pathway_id repeats an earlier one. An invalid optional value is read as unset with a warning.
 func parsePathways(csv *csv.File, stopIdToStop map[string]*Stop) ([]Pathway, []warnings.StaticWarning) {
 	idColumn := csv.RequiredColumn("pathway_id")
 	fromColumn := csv.RequiredColumn("from_stop_id")
@@ -179,14 +179,14 @@ func parsePathways(csv *csv.File, stopIdToStop map[string]*Stop) ([]Pathway, []w
 		return nil
 	}
 	// Each optional number is read as unset, with a warning, when it does
-	// not parse or is out of the range GTFS gives for it. A nil inRange
-	// accepts any value.
+	// not parse or is out of the range GTFS gives for it.
 	checked := func(id, column, raw string, valid bool) bool {
 		if raw != "" && !valid {
 			w = append(w, warnings.NewStaticWarning(csv, warnings.PathwayInvalidValue{PathwayID: id, Column: column, Value: raw}))
 		}
 		return raw != "" && valid
 	}
+	// A nil inRange accepts any value.
 	optionalFloat := func(id, column, raw string, inRange func(float64) bool) *float64 {
 		f := parseFiniteFloat64(raw)
 		if !checked(id, column, raw, f != nil && (inRange == nil || inRange(*f))) {
@@ -224,6 +224,10 @@ func parsePathways(csv *csv.File, stopIdToStop map[string]*Stop) ([]Pathway, []w
 			bidirectional = true
 		default:
 			invalid(id, "invalid is_bidirectional %q", rawBidirectional)
+			continue
+		}
+		if bidirectional && mode == PathwayMode_ExitGate {
+			invalid(id, "exit gate (pathway_mode 7) is bidirectional")
 			continue
 		}
 		from := resolve(id, "from_stop_id", fromID)

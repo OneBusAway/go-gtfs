@@ -149,6 +149,11 @@ func TestParsePathways(t *testing.T) {
 			wantWarnings: []warnings.StaticWarningKind{warnings.PathwayInvalid{PathwayID: "W", Reason: `invalid is_bidirectional "2"`}},
 		},
 		{
+			desc:         "bidirectional exit gate",
+			pathways:     []string{header, "W,E,N,7,1"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.PathwayInvalid{PathwayID: "W", Reason: "exit gate (pathway_mode 7) is bidirectional"}},
+		},
+		{
 			desc:         "missing pathway_mode and is_bidirectional",
 			pathways:     []string{header, "W,E,N,,"},
 			wantWarnings: []warnings.StaticWarningKind{warnings.PathwayInvalid{PathwayID: "W", Reason: "missing values [pathway_mode is_bidirectional]"}},
