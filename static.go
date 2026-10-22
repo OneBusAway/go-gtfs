@@ -35,7 +35,8 @@ type Static struct {
 	// BookingRules is nil when booking_rules.txt is absent.
 	BookingRules []BookingRule
 
-	// FeedInfo is nil when the feed has no feed_info.txt.
+	// FeedInfo is nil when the feed has no feed_info.txt, or when that file
+	// lacks a required column or has no data row.
 	FeedInfo *FeedInfo
 
 	// Warnings raised during GTFS static parsing.
