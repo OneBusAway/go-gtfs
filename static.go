@@ -53,6 +53,11 @@ type Static struct {
 	RiderCategories []RiderCategory
 	FareMedia       []FareMedia
 	FareProducts    []FareProduct
+	// Timeframes and FareLegRules are dropped entirely if their file cannot
+	// be read as CSV: an unset field in a leg rule matches what the other
+	// rules leave out, so a partial set would change what the rest match.
+	Timeframes   []Timeframe
+	FareLegRules []FareLegRule
 	// Attributions with no Agency, Route or Trip apply to the whole feed.
 	Attributions []Attribution
 
@@ -419,6 +424,10 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 	var routeIdToRoute map[string]*Route
 	// GTFS forbids routes.txt network_id when either network file exists.
 	networkFilesPresent := !isAbsentOrEmpty(fileNameToFile[constants.NetworksFile]) || !isAbsentOrEmpty(fileNameToFile[constants.RouteNetworksFile])
+	// Timeframe groups that lost a row, and whether timeframes.txt could not
+	// be read; both affect which fare leg rules can be kept.
+	var lostTimeframes map[string]bool
+	timeframesUnreadable := false
 	// Set when a Fares V1 file cannot be read or lacks a required column, so
 	// that both are dropped.
 	faresV1Unreadable := false
@@ -645,6 +654,31 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 				}
 			},
 			Optional: true,
+		},
+		{
+			File: constants.TimeframesFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				result.Timeframes, lostTimeframes, w = parseTimeframes(file, servicesByID(result.Services))
+				return
+			},
+			Optional: true,
+			Discard: func() {
+				result.Timeframes = nil
+				timeframesUnreadable = true
+			},
+		},
+		{
+			File: constants.FareLegRulesFile,
+			Action: func(file *csv.File) (w []warnings.StaticWarning) {
+				// Without the timeframes, rules naming them would be
+				// skipped and the rest would match more than they should.
+				if !timeframesUnreadable {
+					result.FareLegRules, w = parseFareLegRules(file, result.Networks, result.Areas, result.Timeframes, lostTimeframes, result.FareProducts)
+				}
+				return
+			},
+			Optional: true,
+			Discard:  func() { result.FareLegRules = nil },
 		},
 		{
 			File: "shapes.txt",
@@ -1436,10 +1470,7 @@ func parseScheduledTrips(csv *csv.File, routeIdToRoute map[string]*Route, servic
 		return nil
 	}
 
-	idToService := map[string]*Service{}
-	for i := range services {
-		idToService[services[i].Id] = &services[i]
-	}
+	idToService := servicesByID(services)
 	var trips []ScheduledTrip
 	for csv.NextRow() {
 		trip := ScheduledTrip{
@@ -1857,6 +1888,24 @@ func faresByID(fares []FareAttribute) map[string]*FareAttribute {
 		idToFare[fares[i].Id] = &fares[i]
 	}
 	return idToFare
+}
+
+// idSet returns the set of the items' IDs, for references to IDs that several
+// items may share, such as a fare_product_id.
+func idSet[T any](items []T, id func(T) string) map[string]bool {
+	set := make(map[string]bool, len(items))
+	for _, item := range items {
+		set[id(item)] = true
+	}
+	return set
+}
+
+func servicesByID(services []Service) map[string]*Service {
+	idToService := make(map[string]*Service, len(services))
+	for i := range services {
+		idToService[services[i].Id] = &services[i]
+	}
+	return idToService
 }
 
 func riderCategoriesByID(categories []RiderCategory) map[string]*RiderCategory {
