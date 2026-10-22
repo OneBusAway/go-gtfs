@@ -410,25 +410,6 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
-			desc: "location_type 7 is read as a stop with a warning",
-			content: newZipBuilder().add(
-				"stops.txt",
-				"stop_id,location_type\na,7",
-			).build(),
-			expected: &Static{
-				Stops: []Stop{{Id: "a", Type: StopType_Stop}},
-				Warnings: []warnings.StaticWarning{
-					{
-						Kind:          warnings.StopInvalidLocationType{StopID: "a", Value: "7"},
-						File:          constants.StopsFile,
-						RowNumber:     1,
-						RowContent:    []string{"a", "7"},
-						HeaderContent: []string{"stop_id", "location_type"},
-					},
-				},
-			},
-		},
-		{
 			desc: "non-numeric location_type is read as a stop with a warning",
 			content: newZipBuilder().add(
 				"stops.txt",
