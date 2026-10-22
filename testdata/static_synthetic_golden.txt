@@ -1,4 +1,4 @@
-agency {Id:agency Name:Agency Url:https://example.com Timezone:America/Los_Angeles Language: Phone: FareUrl: Email:}
+agency {Id:agency Name:Agency Url:https://example.com Timezone:America/Los_Angeles Language: Phone: FareUrl: Email: CemvSupport:NotSpecified}
 route route_0 agency=agency FFFFFF 000000 0   BUS  false NOT_ALLOWED NOT_ALLOWED
 route route_1 agency=agency FFFFFF 000000 1   BUS  false NOT_ALLOWED NOT_ALLOWED
 route route_2 agency=agency FFFFFF 000000 2   BUS  false NOT_ALLOWED NOT_ALLOWED

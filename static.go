@@ -49,6 +49,11 @@ type Agency struct {
 	Phone    string
 	FareUrl  string
 	Email    string
+
+	// CemvSupport says whether riders can use a contactless EMV card or
+	// mobile device as fare media on this agency's trips (the cemv_support
+	// column of agency.txt).
+	CemvSupport CemvSupport
 }
 
 // Route corresponds to a single row in the routes.txt file.
@@ -65,6 +70,23 @@ type Route struct {
 	SortOrder         *int32
 	ContinuousPickup  PickupDropOffPolicy
 	ContinuousDropOff PickupDropOffPolicy
+
+	// CemvSupport is the route's own cemv_support value from routes.txt.
+	// Use EffectiveCemvSupport to also take the agency's value into account.
+	CemvSupport CemvSupport
+}
+
+// EffectiveCemvSupport returns the route's cemv_support if it is specified.
+// Otherwise it returns the agency's value, because GTFS says the route's
+// value takes precedence when both are given.
+func (r *Route) EffectiveCemvSupport() CemvSupport {
+	if r.CemvSupport != CemvSupport_NotSpecified {
+		return r.CemvSupport
+	}
+	if r.Agency != nil {
+		return r.Agency.CemvSupport
+	}
+	return CemvSupport_NotSpecified
 }
 
 type Stop struct {
@@ -610,6 +632,7 @@ func parseAgencies(csv *csv.File) ([]Agency, []warnings.StaticWarning) {
 	phoneColumn := csv.OptionalColumn("agency_phone")
 	fareUrlColumn := csv.OptionalColumn("agency_fare_url")
 	emailColumn := csv.OptionalColumn("agency_email")
+	cemvSupportColumn := csv.OptionalColumn("cemv_support")
 
 	if warnings := checkForMissingColumns(csv); len(warnings) > 0 {
 		return nil, warnings
@@ -628,6 +651,8 @@ func parseAgencies(csv *csv.File) ([]Agency, []warnings.StaticWarning) {
 			Phone:    phoneColumn.Read(),
 			FareUrl:  fareUrlColumn.Read(),
 			Email:    emailColumn.Read(),
+
+			CemvSupport: parseCemvSupport(cemvSupportColumn.Read()),
 		}
 		if missingKeys := csv.MissingRowKeys(); len(missingKeys) > 0 {
 			w = append(w, warnings.NewStaticWarning(csv, warnings.AgencyMissingValues{
@@ -654,6 +679,7 @@ func parseRoutes(csv *csv.File, agencies []Agency) []Route {
 	sortOrderColumn := csv.OptionalColumn("route_sort_order")
 	continuousPickupColumn := csv.OptionalColumn("continuous_pickup")
 	continuousDropOffColumn := csv.OptionalColumn("continuous_drop_off")
+	cemvSupportColumn := csv.OptionalColumn("cemv_support")
 
 	if err := csv.MissingRequiredColumns(); err != nil {
 		fmt.Println(err)
@@ -697,6 +723,7 @@ func parseRoutes(csv *csv.File, agencies []Agency) []Route {
 			SortOrder:         parseRouteSortOrder(sortOrderColumn.Read()),
 			ContinuousPickup:  parsePickupDropOffPolicy(continuousPickupColumn.ReadOr("")),
 			ContinuousDropOff: parsePickupDropOffPolicy(continuousDropOffColumn.ReadOr("")),
+			CemvSupport:       parseCemvSupport(cemvSupportColumn.Read()),
 		}
 		if missingKeys := csv.MissingRowKeys(); len(missingKeys) > 0 {
 			log.Printf("Skipping route %+v because of missing keys %s", route, missingKeys)

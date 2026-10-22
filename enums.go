@@ -1054,3 +1054,43 @@ func (b BookingType) String() string {
 		return "UNKNOWN"
 	}
 }
+
+// CemvSupport describes whether riders can use a contactless EMV (cEMV) card
+// or mobile device as fare media.
+//
+// This is a Go representation of the enum described in the `cemv_support`
+// field of `agency.txt` and `routes.txt`.
+type CemvSupport int32
+
+const (
+	// No cEMV information (0 or empty).
+	CemvSupport_NotSpecified CemvSupport = 0
+	// Riders may use cEMV as fare media.
+	CemvSupport_Supported CemvSupport = 1
+	// cEMV is not supported as fare media.
+	CemvSupport_NotSupported CemvSupport = 2
+)
+
+func (c CemvSupport) String() string {
+	switch c {
+	case CemvSupport_NotSpecified:
+		return "NotSpecified"
+	case CemvSupport_Supported:
+		return "Supported"
+	case CemvSupport_NotSupported:
+		return "NotSupported"
+	default:
+		return "Unknown"
+	}
+}
+
+func parseCemvSupport(s string) CemvSupport {
+	switch s {
+	case "1":
+		return CemvSupport_Supported
+	case "2":
+		return CemvSupport_NotSupported
+	default: // "", "0", or anything unexpected
+		return CemvSupport_NotSpecified
+	}
+}
