@@ -277,12 +277,12 @@ func (w TranslationInvalid) Error() string {
 }
 
 // TranslationsWithoutFeedInfo is raised when a feed has translations.txt but
-// no feed_info.txt, which GTFS requires alongside it. The translations are
-// still read.
+// no usable feed_info.txt, which GTFS requires alongside it. The translations
+// are still read.
 type TranslationsWithoutFeedInfo struct{}
 
 func (w TranslationsWithoutFeedInfo) Error() string {
-	return "translations.txt is present but feed_info.txt is missing"
+	return "translations.txt is present but feed_info.txt is missing or unusable"
 }
 
 // TransferMissingStop is raised when a transfers.txt row that does not link

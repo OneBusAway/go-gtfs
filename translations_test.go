@@ -1,9 +1,8 @@
 package gtfs
 
 import (
-	"unsafe"
-
 	"testing"
+	"unsafe"
 
 	"github.com/OneBusAway/go-gtfs/constants"
 	"github.com/OneBusAway/go-gtfs/warnings"
@@ -196,4 +195,22 @@ func TestParseTranslations_RepeatedValuesShareStorage(t *testing.T) {
 	if unsafe.StringData(a.RecordSubId) != unsafe.StringData(c.RecordSubId) {
 		t.Error("equal RecordSubId values do not share storage")
 	}
+}
+
+func TestParseTranslations_FeedInfoWithoutRows(t *testing.T) {
+	feed := newZipBuilderWithDefaults().
+		add("feed_info.txt", "feed_publisher_name,feed_publisher_url,feed_lang").
+		add("translations.txt", translationsHeader, "stops,stop_name,sv,Kyrkan,S2,,").
+		build()
+	static, err := ParseStatic(feed, ParseStaticOptions{})
+	if err != nil {
+		t.Fatalf("ParseStatic: %s", err)
+	}
+	want := warnings.NewFileWarning(constants.TranslationsFile, warnings.TranslationsWithoutFeedInfo{})
+	for _, w := range static.Warnings {
+		if cmp.Equal(w, want) {
+			return
+		}
+	}
+	t.Errorf("no TranslationsWithoutFeedInfo warning in %v", static.Warnings)
 }
