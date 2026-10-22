@@ -27,6 +27,7 @@ func TestFlexWarningKindsHaveMessages(t *testing.T) {
 		{TransferTripNotOnRoute{TripColumn: "from_trip_id", TripID: "t", RouteID: "r"}, `transfer from_trip_id "t" does not run on route "r"`},
 		{TransferStopNotAllowed{Column: "from_stop_id", StopID: "s", Allowed: "a stop (location_type 0)"}, `transfer from_stop_id "s" is not a stop (location_type 0)`},
 		{TransferInvalidType{Value: "6"}, `transfer has invalid transfer_type "6"`},
+		{TransferMissingStop{Column: "from_stop_id"}, "transfer is missing from_stop_id"},
 	} {
 		if got := tc.kind.Error(); got != tc.want {
 			t.Errorf("%T.Error() = %q, want %q", tc.kind, got, tc.want)
