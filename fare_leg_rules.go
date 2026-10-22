@@ -91,16 +91,30 @@ func parseTimeframeTimes(rawStart, rawEnd string) (start, end time.Duration, rea
 	if rawStart == "" || rawEnd == "" {
 		return 0, 0, "start_time and end_time must both be set or both be empty"
 	}
-	// GTFS forbids times after 24:00:00 here.
-	start, ok := parseGtfsTimeToDuration(rawStart)
-	if !ok || start > 24*time.Hour {
+	start, ok := parseTimeframeTime(rawStart)
+	if !ok {
 		return 0, 0, fmt.Sprintf("invalid start_time %q", rawStart)
 	}
-	end, ok = parseGtfsTimeToDuration(rawEnd)
-	if !ok || end > 24*time.Hour {
+	end, ok = parseTimeframeTime(rawEnd)
+	if !ok {
 		return 0, 0, fmt.Sprintf("invalid end_time %q", rawEnd)
 	}
 	return start, end, ""
+}
+
+// parseTimeframeTime reads an H:MM:SS or HH:MM:SS time no later than
+// 24:00:00, which GTFS requires here. parseGtfsTimeToDuration alone also
+// accepts "7", "07:00", "07:99:00", blank text and overflowing hours.
+func parseTimeframeTime(raw string) (time.Duration, bool) {
+	parts := strings.Split(strings.TrimSpace(raw), ":")
+	if len(parts) != 3 || len(parts[0]) < 1 || len(parts[0]) > 2 || len(parts[1]) != 2 || len(parts[2]) != 2 {
+		return 0, false
+	}
+	d, ok := parseGtfsTimeToDuration(raw)
+	if !ok || d > 24*time.Hour || parts[1] > "59" || parts[2] > "59" {
+		return 0, false
+	}
+	return d, true
 }
 
 // parseFareLegRules reads fare_leg_rules.txt. A row is skipped with a

@@ -53,6 +53,21 @@ func TestParseTimeframes(t *testing.T) {
 			wantWarnings: []warnings.StaticWarningKind{warnings.TimeframeInvalid{TimeframeGroupID: "peak", Reason: `invalid start_time "7am"`}},
 		},
 		{
+			desc:         "minutes out of range",
+			lines:        []string{header, "peak,07:99:00,09:00:00,service_id"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TimeframeInvalid{TimeframeGroupID: "peak", Reason: `invalid start_time "07:99:00"`}},
+		},
+		{
+			desc:         "missing seconds",
+			lines:        []string{header, "peak,07:00:00,09:00,service_id"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TimeframeInvalid{TimeframeGroupID: "peak", Reason: `invalid end_time "09:00"`}},
+		},
+		{
+			desc:         "overflowing hours",
+			lines:        []string{header, "peak,9999999999:00:00,09:00:00,service_id"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TimeframeInvalid{TimeframeGroupID: "peak", Reason: `invalid start_time "9999999999:00:00"`}},
+		},
+		{
 			desc:         "unknown service_id",
 			lines:        []string{header, "peak,,,nope"},
 			wantWarnings: []warnings.StaticWarningKind{warnings.TimeframeInvalid{TimeframeGroupID: "peak", Reason: `unknown service_id "nope"`}},
@@ -201,7 +216,7 @@ func TestParseFareLegRules_NetworksFile(t *testing.T) {
 
 func TestParseTimeframes_ServiceIsShared(t *testing.T) {
 	static := parseFaresV2Feed(t, map[string][]string{"timeframes.txt": {"timeframe_group_id,service_id", "g,service_id"}})
-	if static.Timeframes[0].Service != &static.Services[0] {
+	if len(static.Timeframes) != 1 || static.Timeframes[0].Service != &static.Services[0] {
 		t.Error("Timeframe.Service does not point into Static.Services")
 	}
 }
