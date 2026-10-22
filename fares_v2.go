@@ -131,18 +131,18 @@ func parseFareMedia(csv *csv.File) ([]FareMedia, []warnings.StaticWarning) {
 	for csv.NextRow() {
 		m := FareMedia{Id: idColumn.Read(), Name: nameColumn.Read()}
 		rawType := typeColumn.Read()
-		t := parseInt32(strings.TrimSpace(rawType))
+		var typeOK bool
+		m.Type, typeOK = parseEnum(rawType, FareMediaType_None, FareMediaType_MobileApp)
 		missing := csv.MissingRowKeys()
 		reason := ""
 		switch {
 		case len(missing) > 0:
 			reason = fmt.Sprintf("missing values %s", missing)
-		case t == nil || *t < int32(FareMediaType_None) || *t > int32(FareMediaType_MobileApp):
+		case !typeOK:
 			reason = fmt.Sprintf("invalid fare_media_type %q", rawType)
 		case seen[m.Id]:
 			reason = "duplicate fare_media_id"
 		default:
-			m.Type = FareMediaType(*t)
 			seen[m.Id] = true
 			media = append(media, m)
 			continue

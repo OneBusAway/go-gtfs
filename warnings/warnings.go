@@ -476,6 +476,27 @@ func (w FareLegRuleInvalid) Error() string {
 	return fmt.Sprintf("fare leg rule in group %q is invalid: %s", w.LegGroupID, w.Reason)
 }
 
+// FareLegJoinRuleInvalid is raised when a fare_leg_join_rules.txt row is
+// skipped.
+type FareLegJoinRuleInvalid struct {
+	Reason string
+}
+
+func (w FareLegJoinRuleInvalid) Error() string {
+	return fmt.Sprintf("fare leg join rule is invalid: %s", w.Reason)
+}
+
+// FareTransferRuleInvalid is raised when a fare_transfer_rules.txt row is
+// skipped. Since an empty leg group matches the groups other rules leave
+// out, a skipped rule can change what the remaining rules match.
+type FareTransferRuleInvalid struct {
+	Reason string
+}
+
+func (w FareTransferRuleInvalid) Error() string {
+	return fmt.Sprintf("fare transfer rule is invalid: %s", w.Reason)
+}
+
 // TransferMissingStop is raised when a transfers.txt row that does not link
 // trips (transfer_type empty or 0 to 3) leaves from_stop_id or to_stop_id
 // empty. GTFS requires both for these types. The row is skipped.
