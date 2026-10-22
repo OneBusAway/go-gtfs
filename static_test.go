@@ -391,6 +391,73 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
+			desc: "out-of-range location_type is read as a stop with a warning",
+			content: newZipBuilder().add(
+				"stops.txt",
+				"stop_id,location_type\na,5",
+			).build(),
+			expected: &Static{
+				Stops: []Stop{{Id: "a", Type: StopType_Stop}},
+				Warnings: []warnings.StaticWarning{
+					{
+						Kind:          warnings.StopInvalidLocationType{StopID: "a", Value: "5"},
+						File:          constants.StopsFile,
+						RowNumber:     1,
+						RowContent:    []string{"a", "5"},
+						HeaderContent: []string{"stop_id", "location_type"},
+					},
+				},
+			},
+		},
+		{
+			desc: "location_type 7 is read as a stop with a warning",
+			content: newZipBuilder().add(
+				"stops.txt",
+				"stop_id,location_type\na,7",
+			).build(),
+			expected: &Static{
+				Stops: []Stop{{Id: "a", Type: StopType_Stop}},
+				Warnings: []warnings.StaticWarning{
+					{
+						Kind:          warnings.StopInvalidLocationType{StopID: "a", Value: "7"},
+						File:          constants.StopsFile,
+						RowNumber:     1,
+						RowContent:    []string{"a", "7"},
+						HeaderContent: []string{"stop_id", "location_type"},
+					},
+				},
+			},
+		},
+		{
+			desc: "non-numeric location_type is read as a stop with a warning",
+			content: newZipBuilder().add(
+				"stops.txt",
+				"stop_id,location_type\na,abc",
+			).build(),
+			expected: &Static{
+				Stops: []Stop{{Id: "a", Type: StopType_Stop}},
+				Warnings: []warnings.StaticWarning{
+					{
+						Kind:          warnings.StopInvalidLocationType{StopID: "a", Value: "abc"},
+						File:          constants.StopsFile,
+						RowNumber:     1,
+						RowContent:    []string{"a", "abc"},
+						HeaderContent: []string{"stop_id", "location_type"},
+					},
+				},
+			},
+		},
+		{
+			desc: "padded location_type is trimmed",
+			content: newZipBuilder().add(
+				"stops.txt",
+				"stop_id,location_type\na, 1",
+			).build(),
+			expected: &Static{
+				Stops: []Stop{{Id: "a", Type: StopType_Station}},
+			},
+		},
+		{
 			desc: "transfer",
 			content: newZipBuilder().add(
 				"stops.txt",
@@ -2391,5 +2458,31 @@ func TestParseStatic_LocationsFeatureQuirks(t *testing.T) {
 	}
 	if static.Locations[1].Name != "Kept" {
 		t.Errorf("Name = %q, want %q", static.Locations[1].Name, "Kept")
+	}
+}
+
+func TestParseStopType(t *testing.T) {
+	for _, tc := range []struct {
+		in     string
+		want   StopType
+		wantOK bool
+	}{
+		{"", StopType_Stop, true},
+		{"0", StopType_Stop, true},
+		{"1", StopType_Station, true},
+		{"2", StopType_EntranceOrExit, true},
+		{"3", StopType_GenericNode, true},
+		{"4", StopType_BoardingArea, true},
+		{" 1", StopType_Station, true},
+		{"4 ", StopType_BoardingArea, true},
+		{"5", StopType_Stop, false},
+		{"-1", StopType_Stop, false},
+		{"1.0", StopType_Stop, false},
+		{"abc", StopType_Stop, false},
+	} {
+		got, ok := parseStopType(tc.in)
+		if got != tc.want || ok != tc.wantOK {
+			t.Errorf("parseStopType(%q) = %s, %t, want %s, %t", tc.in, got, ok, tc.want, tc.wantOK)
+		}
 	}
 }

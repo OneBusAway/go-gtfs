@@ -4,6 +4,7 @@ type StaticFile string
 
 const (
 	AgencyFile             StaticFile = "agency.txt"
+	StopsFile              StaticFile = "stops.txt"
 	StopTimesFile          StaticFile = "stop_times.txt"
 	BookingRulesFile       StaticFile = "booking_rules.txt"
 	LocationGroupsFile     StaticFile = "location_groups.txt"
