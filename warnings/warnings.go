@@ -400,6 +400,48 @@ func (w FareRuleInvalid) Error() string {
 	return fmt.Sprintf("fare rule for fare %q is invalid: %s", w.FareID, w.Reason)
 }
 
+// RiderCategoryInvalid is raised when a rider_categories.txt row is skipped.
+type RiderCategoryInvalid struct {
+	RiderCategoryID string
+	Reason          string
+}
+
+func (w RiderCategoryInvalid) Error() string {
+	return fmt.Sprintf("rider category %q is invalid: %s", w.RiderCategoryID, w.Reason)
+}
+
+// FareMediaInvalid is raised when a fare_media.txt row is skipped.
+type FareMediaInvalid struct {
+	FareMediaID string
+	Reason      string
+}
+
+func (w FareMediaInvalid) Error() string {
+	return fmt.Sprintf("fare media %q is invalid: %s", w.FareMediaID, w.Reason)
+}
+
+// FareProductInvalid is raised when a fare_products.txt row is skipped.
+type FareProductInvalid struct {
+	FareProductID string
+	Reason        string
+}
+
+func (w FareProductInvalid) Error() string {
+	return fmt.Sprintf("fare product %q is invalid: %s", w.FareProductID, w.Reason)
+}
+
+// FareProductDefaultCategory is raised when several rider categories are
+// eligible for a fare product but Defaults of them, not exactly one, are the
+// default, which GTFS requires. The product is kept.
+type FareProductDefaultCategory struct {
+	FareProductID string
+	Defaults      int
+}
+
+func (w FareProductDefaultCategory) Error() string {
+	return fmt.Sprintf("fare product %q has %d default rider categories among its eligible ones; want exactly 1", w.FareProductID, w.Defaults)
+}
+
 // TransferMissingStop is raised when a transfers.txt row that does not link
 // trips (transfer_type empty or 0 to 3) leaves from_stop_id or to_stop_id
 // empty. GTFS requires both for these types. The row is skipped.
