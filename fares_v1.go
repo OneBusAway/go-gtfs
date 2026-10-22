@@ -2,6 +2,7 @@ package gtfs
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/OneBusAway/go-gtfs/csv"
@@ -60,7 +61,8 @@ type FareRule struct {
 // warning if a required value is missing or invalid, its agency_id is
 // unknown, or its fare_id repeats an earlier one. A row without agency_id
 // uses the feed's agency if there is just one, and otherwise gets a warning.
-func parseFareAttributes(csv *csv.File, agencies []Agency) ([]FareAttribute, []warnings.StaticWarning) {
+// ok is false when the header lacks a required column.
+func parseFareAttributes(csv *csv.File, agencies []Agency) (fares []FareAttribute, w []warnings.StaticWarning, ok bool) {
 	idColumn := csv.RequiredColumn("fare_id")
 	priceColumn := csv.RequiredColumn("price")
 	currencyColumn := csv.RequiredColumn("currency_type")
@@ -75,12 +77,10 @@ func parseFareAttributes(csv *csv.File, agencies []Agency) ([]FareAttribute, []w
 		missing = append(missing, "transfers")
 	}
 	if len(missing) > 0 {
-		return nil, missingColumnsWarning(csv, missing)
+		return nil, missingColumnsWarning(csv, missing), false
 	}
 
 	agencyIdToAgency := agenciesByID(agencies)
-	var fares []FareAttribute
-	var w []warnings.StaticWarning
 	seen := map[string]bool{}
 	for csv.NextRow() {
 		id := idColumn.Read()
@@ -141,12 +141,17 @@ func parseFareAttributes(csv *csv.File, agencies []Agency) ([]FareAttribute, []w
 		}
 		fares = append(fares, fare)
 	}
-	return fares, w
+	return fares, w, true
 }
 
 // parseFareRules reads fare_rules.txt. A row with a missing or unknown
 // fare_id, or an unknown route_id, is skipped with a warning.
-func parseFareRules(csv *csv.File, fares []FareAttribute, routeIdToRoute map[string]*Route) ([]FareRule, []warnings.StaticWarning) {
+//
+// GTFS reads a fare with no rules as applying to every trip, so a fare whose
+// rows were all skipped is removed from the returned fares, with a warning,
+// rather than left to apply everywhere. ok is false when the header lacks a
+// required column, in which case no rule could be read.
+func parseFareRules(csv *csv.File, fares []FareAttribute, routeIdToRoute map[string]*Route) (keptFares []FareAttribute, rules []FareRule, w []warnings.StaticWarning, ok bool) {
 	fareIDColumn := csv.RequiredColumn("fare_id")
 	routeIDColumn := csv.OptionalColumn("route_id")
 	originColumn := csv.OptionalColumn("origin_id")
@@ -154,12 +159,12 @@ func parseFareRules(csv *csv.File, fares []FareAttribute, routeIdToRoute map[str
 	containsColumn := csv.OptionalColumn("contains_id")
 
 	if w := checkForMissingColumns(csv); len(w) > 0 {
-		return nil, w
+		return nil, nil, w, false
 	}
 
 	fareIdToFare := faresByID(fares)
-	var rules []FareRule
-	var w []warnings.StaticWarning
+	// Fares with a skipped row, and fares with a kept row.
+	skipped, kept := map[string]bool{}, map[string]bool{}
 	for csv.NextRow() {
 		fareID := fareIDColumn.Read()
 		routeID := routeIDColumn.Read()
@@ -180,10 +185,31 @@ func parseFareRules(csv *csv.File, fares []FareAttribute, routeIdToRoute map[str
 			// Reading it as unset would make the rule apply to every route.
 			reason = fmt.Sprintf("unknown route_id %q", routeID)
 		default:
+			kept[fareID] = true
 			rules = append(rules, rule)
 			continue
 		}
+		if rule.Fare != nil {
+			skipped[fareID] = true
+		}
 		w = append(w, warnings.NewStaticWarning(csv, warnings.FareRuleInvalid{FareID: fareID, Reason: reason}))
 	}
-	return rules, w
+
+	keptFares = fares
+	if dropped := func(f FareAttribute) bool { return skipped[f.Id] && !kept[f.Id] }; slices.ContainsFunc(fares, dropped) {
+		keptFares = nil
+		for _, f := range fares {
+			if dropped(f) {
+				w = append(w, warnings.NewFileWarning(csv.Name(), warnings.FareAttributeInvalid{FareID: f.Id, Reason: "every fare_rules.txt row for it was skipped"}))
+				continue
+			}
+			keptFares = append(keptFares, f)
+		}
+		// The rules pointed into the old slice.
+		fareIdToFare = faresByID(keptFares)
+		for i := range rules {
+			rules[i].Fare = fareIdToFare[rules[i].Fare.Id]
+		}
+	}
+	return keptFares, rules, w, true
 }

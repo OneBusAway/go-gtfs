@@ -414,7 +414,8 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 	var routeIdToRoute map[string]*Route
 	// GTFS forbids routes.txt network_id when either network file exists.
 	networkFilesPresent := !isAbsentOrEmpty(fileNameToFile[constants.NetworksFile]) || !isAbsentOrEmpty(fileNameToFile[constants.RouteNetworksFile])
-	// Set when a Fares V1 file cannot be read, so that both are dropped.
+	// Set when a Fares V1 file cannot be read or lacks a required column, so
+	// that both are dropped.
 	faresV1Unreadable := false
 	dropFaresV1 := func() {
 		faresV1Unreadable = true
@@ -486,7 +487,11 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 		{
 			File: constants.FareAttributesFile,
 			Action: func(file *csv.File) (w []warnings.StaticWarning) {
-				result.FareAttributes, w = parseFareAttributes(file, result.Agencies)
+				var ok bool
+				result.FareAttributes, w, ok = parseFareAttributes(file, result.Agencies)
+				if !ok {
+					dropFaresV1()
+				}
 				return
 			},
 			Optional: true,
@@ -495,10 +500,16 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 		{
 			File: constants.FareRulesFile,
 			Action: func(file *csv.File) (w []warnings.StaticWarning) {
-				// Without the fares, every rule would only report an
+				// Without usable fares, every rule would only report an
 				// unknown fare_id.
-				if !faresV1Unreadable {
-					result.FareRules, w = parseFareRules(file, result.FareAttributes, routeIdToRoute)
+				if faresV1Unreadable {
+					return
+				}
+				var ok bool
+				result.FareAttributes, result.FareRules, w, ok = parseFareRules(file, result.FareAttributes, routeIdToRoute)
+				if !ok {
+					// With no rules, every fare would apply everywhere.
+					dropFaresV1()
 				}
 				return
 			},

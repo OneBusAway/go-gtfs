@@ -206,9 +206,12 @@ func TestParseFareRules(t *testing.T) {
 			wantWarnings: []warnings.StaticWarningKind{warnings.FareRuleInvalid{FareID: "nope", Reason: "unknown fare_id"}},
 		},
 		{
-			desc:         "unknown route_id",
-			rules:        []string{header, "f,nope,,,"},
-			wantWarnings: []warnings.StaticWarningKind{warnings.FareRuleInvalid{FareID: "f", Reason: `unknown route_id "nope"`}},
+			desc:  "unknown route_id",
+			rules: []string{header, "f,nope,,,"},
+			wantWarnings: []warnings.StaticWarningKind{
+				warnings.FareRuleInvalid{FareID: "f", Reason: `unknown route_id "nope"`},
+				warnings.FareAttributeInvalid{FareID: "f", Reason: "every fare_rules.txt row for it was skipped"},
+			},
 		},
 		{
 			desc:         "missing fare_id",
@@ -298,5 +301,75 @@ func TestCurrencyAmountFloat64(t *testing.T) {
 	}
 	if got := (CurrencyAmount{Units: -5, Scale: 2}).Float64(); got != -0.05 {
 		t.Errorf("Float64() = %v, want -0.05", got)
+	}
+}
+
+// GTFS reads a fare with no rules as applying to every trip, so a fare whose
+// rules were all skipped must not be kept as if it had none.
+func TestParseFareRules_FareLeftWithoutRules(t *testing.T) {
+	attributes := []string{"fare_id,price,currency_type,payment_method,transfers", "f,1,USD,0,", "g,2,USD,0,", "h,3,USD,0,"}
+	for _, tc := range []struct {
+		desc         string
+		rules        []string
+		wantFares    []string
+		wantRules    []string
+		wantWarnings []warnings.StaticWarningKind
+	}{
+		{
+			desc:      "only rule skipped drops the fare",
+			rules:     []string{"fare_id,route_id", "f,nope", "g,route_id", "h,route_id"},
+			wantFares: []string{"g", "h"},
+			wantRules: []string{"fare=g route=route_id origin= destination= contains=", "fare=h route=route_id origin= destination= contains="},
+			wantWarnings: []warnings.StaticWarningKind{
+				warnings.FareRuleInvalid{FareID: "f", Reason: `unknown route_id "nope"`},
+				warnings.FareAttributeInvalid{FareID: "f", Reason: "every fare_rules.txt row for it was skipped"},
+			},
+		},
+		{
+			desc:         "one of two rules skipped keeps the fare",
+			rules:        []string{"fare_id,route_id", "f,route_id", "f,nope"},
+			wantFares:    []string{"f", "g", "h"},
+			wantRules:    []string{"fare=f route=route_id origin= destination= contains="},
+			wantWarnings: []warnings.StaticWarningKind{warnings.FareRuleInvalid{FareID: "f", Reason: `unknown route_id "nope"`}},
+		},
+		{
+			desc:         "fare_rules.txt without fare_id drops every fare",
+			rules:        []string{"route_id", "route_id"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.MissingColumns{Columns: []string{"fare_id"}}},
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			static := parseFaresV1Feed(t, nil, attributes, tc.rules)
+			var fares []string
+			for _, f := range static.FareAttributes {
+				fares = append(fares, f.Id)
+			}
+			if diff := cmp.Diff(fares, tc.wantFares); diff != "" {
+				t.Errorf("fares mismatch (-got +want):\n%s", diff)
+			}
+			if diff := cmp.Diff(summarizeFareRules(static.FareRules), tc.wantRules); diff != "" {
+				t.Errorf("FareRules mismatch (-got +want):\n%s", diff)
+			}
+			if diff := cmp.Diff(warningKinds(static.Warnings), tc.wantWarnings); diff != "" {
+				t.Errorf("Warnings mismatch (-got +want):\n%s", diff)
+			}
+			fareByID := faresByID(static.FareAttributes)
+			for _, r := range static.FareRules {
+				if r.Fare != fareByID[r.Fare.Id] {
+					t.Errorf("rule for %s does not point into Static.FareAttributes", r.Fare.Id)
+				}
+			}
+		})
+	}
+}
+
+// Without usable fares, fare_rules.txt rows would only report unknown fares.
+func TestParseFareRules_SkippedWhenFareAttributesUnusable(t *testing.T) {
+	static := parseFaresV1Feed(t, nil,
+		[]string{"fare_id,price,currency_type,payment_method", "f,1,USD,0"},
+		[]string{"fare_id,route_id", "f,route_id", "g,route_id"})
+	want := []warnings.StaticWarningKind{warnings.MissingColumns{Columns: []string{"transfers"}}}
+	if diff := cmp.Diff(warningKinds(static.Warnings), want); diff != "" {
+		t.Errorf("Warnings mismatch (-got +want):\n%s", diff)
 	}
 }
