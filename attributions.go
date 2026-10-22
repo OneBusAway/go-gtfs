@@ -47,14 +47,15 @@ func parseAttributions(csv *csv.File, agencies []Agency, routeIdToRoute map[stri
 		return nil, w
 	}
 
-	agencyIdToAgency := make(map[string]*Agency, len(agencies))
-	for i := range agencies {
-		agencyIdToAgency[agencies[i].Id] = &agencies[i]
-	}
+	agencyIdToAgency := agenciesByID(agencies)
 
 	var attributions []Attribution
 	var w []warnings.StaticWarning
+	invalid := func(id, format string, a ...any) {
+		w = append(w, warnings.NewStaticWarning(csv, warnings.AttributionInvalid{AttributionID: id, Reason: fmt.Sprintf(format, a...)}))
+	}
 	seen := map[string]bool{}
+rows:
 	for csv.NextRow() {
 		a := Attribution{
 			Id:               idColumn.Read(),
@@ -63,55 +64,73 @@ func parseAttributions(csv *csv.File, agencies []Agency, routeIdToRoute map[stri
 			Email:            emailColumn.Read(),
 			Phone:            phoneColumn.Read(),
 		}
-		reason := func() string {
-			if missingKeys := csv.MissingRowKeys(); len(missingKeys) > 0 {
-				return fmt.Sprintf("missing values %s", missingKeys)
+		if missingKeys := csv.MissingRowKeys(); len(missingKeys) > 0 {
+			invalid(a.Id, "missing values %s", missingKeys)
+			continue
+		}
+		for _, role := range []struct {
+			column string
+			raw    string
+			value  *bool
+		}{
+			{"is_producer", isProducerColumn.Read(), &a.IsProducer},
+			{"is_operator", isOperatorColumn.Read(), &a.IsOperator},
+			{"is_authority", isAuthorityColumn.Read(), &a.IsAuthority},
+		} {
+			v, ok := parseRole(role.raw)
+			if !ok {
+				invalid(a.Id, "invalid %s %q", role.column, role.raw)
+				continue rows
 			}
-			for _, role := range []struct {
-				column string
-				raw    string
-				value  *bool
-			}{
-				{"is_producer", isProducerColumn.Read(), &a.IsProducer},
-				{"is_operator", isOperatorColumn.Read(), &a.IsOperator},
-				{"is_authority", isAuthorityColumn.Read(), &a.IsAuthority},
-			} {
-				switch strings.TrimSpace(role.raw) {
-				case "", "0":
-				case "1":
-					*role.value = true
-				default:
-					return fmt.Sprintf("invalid %s %q", role.column, role.raw)
-				}
+			*role.value = v
+		}
+		agencyID, routeID, tripID := agencyIDColumn.Read(), routeIDColumn.Read(), tripIDColumn.Read()
+		scopes := 0
+		for _, id := range []string{agencyID, routeID, tripID} {
+			if id != "" {
+				scopes++
 			}
-			agencyID, routeID, tripID := agencyIDColumn.Read(), routeIDColumn.Read(), tripIDColumn.Read()
-			switch {
-			case (agencyID != "" && routeID != "") || (agencyID != "" && tripID != "") || (routeID != "" && tripID != ""):
-				return "more than one of agency_id, route_id and trip_id is set"
-			case agencyID != "":
-				if a.Agency = agencyIdToAgency[agencyID]; a.Agency == nil {
-					return fmt.Sprintf("unknown agency_id %q", agencyID)
-				}
-			case routeID != "":
-				if a.Route = routeIdToRoute[routeID]; a.Route == nil {
-					return fmt.Sprintf("unknown route_id %q", routeID)
-				}
-			case tripID != "":
-				if a.Trip = tripIdToTrip[tripID]; a.Trip == nil {
-					return fmt.Sprintf("unknown trip_id %q", tripID)
-				}
+		}
+		if scopes > 1 {
+			invalid(a.Id, "more than one of agency_id, route_id and trip_id is set")
+			continue
+		}
+		switch {
+		case agencyID != "":
+			if a.Agency = agencyIdToAgency[agencyID]; a.Agency == nil {
+				invalid(a.Id, "unknown agency_id %q", agencyID)
+				continue
 			}
-			if a.Id != "" && seen[a.Id] {
-				return "duplicate attribution_id"
+		case routeID != "":
+			if a.Route = routeIdToRoute[routeID]; a.Route == nil {
+				invalid(a.Id, "unknown route_id %q", routeID)
+				continue
 			}
-			return ""
-		}()
-		if reason != "" {
-			w = append(w, warnings.NewStaticWarning(csv, warnings.AttributionInvalid{AttributionID: a.Id, Reason: reason}))
+		case tripID != "":
+			if a.Trip = tripIdToTrip[tripID]; a.Trip == nil {
+				invalid(a.Id, "unknown trip_id %q", tripID)
+				continue
+			}
+		}
+		if a.Id != "" && seen[a.Id] {
+			invalid(a.Id, "duplicate attribution_id")
 			continue
 		}
 		seen[a.Id] = true
 		attributions = append(attributions, a)
 	}
 	return attributions, w
+}
+
+// parseRole reads an is_producer, is_operator or is_authority value, ignoring
+// surrounding whitespace. Empty means 0. ok is false for any other value.
+func parseRole(s string) (v, ok bool) {
+	switch strings.TrimSpace(s) {
+	case "", "0":
+		return false, true
+	case "1":
+		return true, true
+	default:
+		return false, false
+	}
 }

@@ -40,6 +40,7 @@ type Static struct {
 	// Translations is nil when translations.txt is absent. Use NewTranslator
 	// to look them up.
 	Translations []Translation
+	// Attributions with no Agency, Route or Trip apply to the whole feed.
 	Attributions []Attribution
 
 	// FeedInfo is nil when the feed has no feed_info.txt, or when that file
@@ -1701,6 +1702,14 @@ func parseTripStops(csv *csv.File, stopIdToStop map[string]*Stop, trips []Schedu
 		trips[i].Stops = tripStops
 		visitsByTrip[i] = nil
 	}
+}
+
+func agenciesByID(agencies []Agency) map[string]*Agency {
+	idToAgency := make(map[string]*Agency, len(agencies))
+	for i := range agencies {
+		idToAgency[agencies[i].Id] = &agencies[i]
+	}
+	return idToAgency
 }
 
 func levelsByID(levels []Level) map[string]*Level {
