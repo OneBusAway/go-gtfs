@@ -1985,6 +1985,28 @@ func TestParse(t *testing.T) {
 	}
 }
 
+// stopID, routeID and tripID return the ID of a possibly nil reference.
+func stopID(s *Stop) string {
+	if s == nil {
+		return ""
+	}
+	return s.Id
+}
+
+func routeID(r *Route) string {
+	if r == nil {
+		return ""
+	}
+	return r.Id
+}
+
+func tripID(t *ScheduledTrip) string {
+	if t == nil {
+		return ""
+	}
+	return t.ID
+}
+
 type zipBuilder struct {
 	m map[string]string
 }

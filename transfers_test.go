@@ -64,27 +64,6 @@ func summarizeTransfers(transfers []Transfer) []string {
 	return s
 }
 
-func stopID(s *Stop) string {
-	if s == nil {
-		return ""
-	}
-	return s.Id
-}
-
-func routeID(r *Route) string {
-	if r == nil {
-		return ""
-	}
-	return r.Id
-}
-
-func tripID(t *ScheduledTrip) string {
-	if t == nil {
-		return ""
-	}
-	return t.ID
-}
-
 func warningKinds(ws []warnings.StaticWarning) []warnings.StaticWarningKind {
 	var kinds []warnings.StaticWarningKind
 	for _, w := range ws {
