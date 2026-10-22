@@ -82,6 +82,17 @@ func (w AgencyMissingValues) Error() string {
 	return fmt.Sprintf("agency %q is missing values %s", w.AgencyID, w.Columns)
 }
 
+// FileUnreadable is raised when an optional file that only adds to the feed,
+// such as feed_info.txt, cannot be read as CSV. The file is ignored and the
+// rest of the feed is parsed as if it were absent.
+type FileUnreadable struct {
+	Reason string
+}
+
+func (w FileUnreadable) Error() string {
+	return fmt.Sprintf("file could not be read and was ignored: %s", w.Reason)
+}
+
 // FeedInfoExtraRow is raised for each feed_info.txt row after the first.
 // GTFS allows one row. The extra rows are ignored.
 type FeedInfoExtraRow struct{}

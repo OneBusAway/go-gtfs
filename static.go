@@ -395,6 +395,11 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 		PostProcess func()
 		Optional    bool
 		Skip        bool
+		// Discard, when set, makes an unreadable file a warning rather than
+		// an error. It must undo what Action stored, so the feed parses as
+		// if the file were absent. Use it for files that only add to the
+		// feed, whose problems should not stop the rest from parsing.
+		Discard func()
 	}{
 		{
 			File: constants.AgencyFile,
@@ -417,6 +422,7 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 				return
 			},
 			Optional: true,
+			Discard:  func() { result.FeedInfo = nil },
 		},
 		{
 			File: "routes.txt",
@@ -556,14 +562,23 @@ func parseStatic(fileNameToFile map[constants.StaticFile]*zip.File, opts ParseSt
 		}
 		file, err := openCsvFile(table.File, zipFile)
 		if err != nil {
+			if table.Discard != nil {
+				result.Warnings = append(result.Warnings, warnings.NewFileWarning(table.File, warnings.FileUnreadable{Reason: err.Error()}))
+				table.PostProcess()
+				continue
+			}
 			return nil, fmt.Errorf("failed to read %q: %w", table.File, err)
 		}
 		w := table.Action(file)
+		if err := file.Close(); err != nil {
+			if table.Discard == nil {
+				return nil, fmt.Errorf("failed to read %q: %w", table.File, err)
+			}
+			table.Discard()
+			w = []warnings.StaticWarning{warnings.NewFileWarning(table.File, warnings.FileUnreadable{Reason: err.Error()})}
+		}
 		table.PostProcess()
 		result.Warnings = append(result.Warnings, w...)
-		if err := file.Close(); err != nil {
-			return nil, fmt.Errorf("failed to read %q: %w", table.File, err)
-		}
 	}
 	return result, nil
 }
