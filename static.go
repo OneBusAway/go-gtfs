@@ -954,6 +954,24 @@ func parseTransfers(csv *csv.File, stops []Stop, routes []Route, tripIdToTrip ma
 		if !ok {
 			continue
 		}
+		if linkedTrips {
+			// Linked trips run on one vehicle, so GTFS only allows a stop
+			// (location_type 0) here, never a station.
+			for _, ref := range []struct {
+				column string
+				stop   *Stop
+			}{
+				{"from_stop_id", fromStop},
+				{"to_stop_id", toStop},
+			} {
+				if ref.stop != nil && ref.stop.Type != StopType_Stop {
+					w = append(w, warnings.NewStaticWarning(csv, warnings.TransferStopNotAllowed{Column: ref.column, StopID: ref.stop.Id}))
+				}
+			}
+			if len(w) > warningsBefore {
+				continue
+			}
+		}
 		transfers = append(transfers, Transfer{
 			From:            fromStop,
 			To:              toStop,

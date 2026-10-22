@@ -197,6 +197,16 @@ func TestParseTransfers(t *testing.T) {
 			wantWarnings: []warnings.StaticWarningKind{warnings.TransferUnknownReference{Column: "from_trip_id", ID: "UNKNOWN"}},
 		},
 		{
+			desc:         "in-seat transfer from a station",
+			transfers:    []string{header, "ST,S2,,,T1,T2,4,"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferStopNotAllowed{Column: "from_stop_id", StopID: "ST"}},
+		},
+		{
+			desc:         "in-seat transfer not allowed to a station",
+			transfers:    []string{header, "S1,ST,,,T1,T2,5,"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferStopNotAllowed{Column: "to_stop_id", StopID: "ST"}},
+		},
+		{
 			desc:      "minimum time transfer without from_stop_id is skipped",
 			transfers: []string{header, ",S2,,,,,2,180"},
 		},
