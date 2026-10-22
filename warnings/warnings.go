@@ -210,6 +210,27 @@ func (w StopInvalidLocationType) Error() string {
 	return fmt.Sprintf("stop %q has invalid location_type %q; read as a stop", w.StopID, w.Value)
 }
 
+// StopUnknownLevel is raised when a stops.txt row names a level_id that
+// levels.txt does not define. The stop is kept without a level.
+type StopUnknownLevel struct {
+	StopID  string
+	LevelID string
+}
+
+func (w StopUnknownLevel) Error() string {
+	return fmt.Sprintf("stop %q references unknown level %q", w.StopID, w.LevelID)
+}
+
+// LevelInvalid is raised when a levels.txt row is skipped.
+type LevelInvalid struct {
+	LevelID string
+	Reason  string
+}
+
+func (w LevelInvalid) Error() string {
+	return fmt.Sprintf("level %q is invalid: %s", w.LevelID, w.Reason)
+}
+
 // TransferMissingStop is raised when a transfers.txt row that does not link
 // trips (transfer_type empty or 0 to 3) leaves from_stop_id or to_stop_id
 // empty. GTFS requires both for these types. The row is skipped.
