@@ -596,8 +596,8 @@ func readZipFile(zipFile *zip.File) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = reader.Close() }()
-	return io.ReadAll(reader)
+	b, err := io.ReadAll(reader)
+	return b, firstError(err, reader.Close())
 }
 
 func parseAgencies(csv *csv.File) ([]Agency, []warnings.StaticWarning) {

@@ -13,8 +13,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  checks:
-    name: Format, vet, modules, build
+  lint:
+    name: Lint, vet, modules
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -25,16 +25,6 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: stable
-
-      - name: Check formatting
-        run: |
-          unformatted=$(gofmt -l .)
-          if [ -n "$unformatted" ]; then
-            echo "These files are not gofmt-formatted:"
-            echo "$unformatted"
-            echo "To fix, run: gofmt -w ."
-            exit 1
-          fi
 
       - name: Check go.mod and go.sum are tidy
         run: go mod tidy -diff
@@ -45,22 +35,7 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Build
-        run: go build ./...
-
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: stable
-
+      # Also checks formatting (goimports) and that every package compiles.
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.15.0
@@ -95,7 +70,6 @@ jobs:
         if: matrix.name == 'stable'
         run: |
           total=$(go tool cover -func=coverage.out | tail -1 | awk '{print $NF}')
-          echo "Total coverage: $total"
           echo "### Test coverage: $total" >> "$GITHUB_STEP_SUMMARY"
 
   vulncheck:
