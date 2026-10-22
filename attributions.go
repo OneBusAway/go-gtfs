@@ -116,6 +116,10 @@ rows:
 			invalid(a.Id, "duplicate attribution_id")
 			continue
 		}
+		// GTFS recommends, but does not require, at least one role.
+		if !a.IsProducer && !a.IsOperator && !a.IsAuthority {
+			w = append(w, warnings.NewStaticWarning(csv, warnings.AttributionWithoutRole{AttributionID: a.Id}))
+		}
 		seen[a.Id] = true
 		attributions = append(attributions, a)
 	}

@@ -105,6 +105,12 @@ func TestParseAttributions(t *testing.T) {
 			wantWarnings: []warnings.StaticWarningKind{warnings.AttributionInvalid{AttributionID: "X", Reason: `invalid is_producer "yes"`}},
 		},
 		{
+			desc:         "no role set is kept with a warning",
+			lines:        []string{header, "X,,,,Org,0,,0,,,"},
+			want:         []string{`id=X agency= route= trip= org="Org" producer=false operator=false authority=false url= email= phone=`},
+			wantWarnings: []warnings.StaticWarningKind{warnings.AttributionWithoutRole{AttributionID: "X"}},
+		},
+		{
 			desc:  "padded role",
 			lines: []string{header, "X,,,,Org, 1,0 ,,,,"},
 			want:  []string{`id=X agency= route= trip= org="Org" producer=true operator=false authority=false url= email= phone=`},
@@ -142,8 +148,8 @@ func TestParseAttributions(t *testing.T) {
 // Scope pointers must point into Static's slices, not at copies.
 func TestParseAttributions_ScopesAreShared(t *testing.T) {
 	static := parseAttributionsFeed(t,
-		"agency_id,route_id,trip_id,organization_name",
-		"a,,,Org", ",route_id,,Org", ",,trip_id,Org",
+		"agency_id,route_id,trip_id,organization_name,is_producer",
+		"a,,,Org,1", ",route_id,,Org,1", ",,trip_id,Org,1",
 	)
 	if got := static.Attributions; got[0].Agency != &static.Agencies[0] || got[1].Route != &static.Routes[0] || got[2].Trip != &static.Trips[0] {
 		t.Errorf("attribution scopes do not point into Static.Agencies, Routes and Trips")

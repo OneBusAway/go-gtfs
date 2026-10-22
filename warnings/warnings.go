@@ -295,6 +295,17 @@ func (w AttributionInvalid) Error() string {
 	return fmt.Sprintf("attribution %q is invalid: %s", w.AttributionID, w.Reason)
 }
 
+// AttributionWithoutRole is raised when an attributions.txt row sets none
+// of is_producer, is_operator and is_authority to 1, which GTFS recommends.
+// The attribution is kept.
+type AttributionWithoutRole struct {
+	AttributionID string
+}
+
+func (w AttributionWithoutRole) Error() string {
+	return fmt.Sprintf("attribution %q has no role; set is_producer, is_operator or is_authority", w.AttributionID)
+}
+
 // TransferMissingStop is raised when a transfers.txt row that does not link
 // trips (transfer_type empty or 0 to 3) leaves from_stop_id or to_stop_id
 // empty. GTFS requires both for these types. The row is skipped.

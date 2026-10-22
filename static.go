@@ -758,19 +758,14 @@ func parseRoutes(csv *csv.File, agencies []Agency) []Route {
 		return nil
 	}
 
+	agencyIdToAgency := agenciesByID(agencies)
 	var routes []Route
 	for csv.NextRow() {
 		routeID := idColumn.Read()
 		agencyID := agencyIDColumn.Read()
 		var agency *Agency
 		if agencyID != "" {
-			for i := range agencies {
-				if agencies[i].Id == agencyID {
-					agency = &agencies[i]
-					break
-				}
-			}
-			if agency == nil {
+			if agency = agencyIdToAgency[agencyID]; agency == nil {
 				log.Printf("skipping route %s: no match for agency ID %s", routeID, agencyID)
 				continue
 			}
@@ -1704,10 +1699,14 @@ func parseTripStops(csv *csv.File, stopIdToStop map[string]*Stop, trips []Schedu
 	}
 }
 
+// agenciesByID maps each agency ID to its first agency, so a repeated
+// agency_id resolves the same way for every file that references it.
 func agenciesByID(agencies []Agency) map[string]*Agency {
 	idToAgency := make(map[string]*Agency, len(agencies))
 	for i := range agencies {
-		idToAgency[agencies[i].Id] = &agencies[i]
+		if _, ok := idToAgency[agencies[i].Id]; !ok {
+			idToAgency[agencies[i].Id] = &agencies[i]
+		}
 	}
 	return idToAgency
 }
