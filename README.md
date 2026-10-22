@@ -197,6 +197,4 @@ The `proto` subpackage is generated from the `.proto` files next to it. After ed
 buf generate
 ```
 
-`buf.gen.yaml` runs `protoc-gen-go` through `go tool`, and `go.mod` pins its version, so the
-output matches the `google.golang.org/protobuf` version the library uses. CI regenerates the
-code and fails if it differs from what is committed.
+CI fails if the committed code is out of date.

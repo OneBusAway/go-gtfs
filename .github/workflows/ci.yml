@@ -106,16 +106,18 @@ jobs:
         with:
           go-version-file: go.mod
 
-      # buf drives protoc-gen-go, which go.mod pins as a tool.
-      - name: Install buf
-        run: go install github.com/bufbuild/buf/cmd/buf@v1.73.0
+      - uses: bufbuild/buf-action@85aebf73123b5c15fd5528aaecbf9129cddf7fa7 # v1.6.0
+        with:
+          version: 1.73.0
+          # sha256 of buf-Linux-x86_64 from the v1.73.0 release.
+          checksum: 8f2986298ad08f0cc1bf999b9797b7c383adf32d7edf0f73d6f1e1a701baeac1
+          setup_only: true
 
       - name: Check proto/*.pb.go match the .proto sources
         run: |
           buf generate
           if [ -n "$(git status --porcelain)" ]; then
             git status --short
-            git --no-pager diff --stat
             echo "::error::Generated code is out of date. Run 'buf generate' and commit the result."
             exit 1
           fi
