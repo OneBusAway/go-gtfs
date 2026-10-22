@@ -102,6 +102,9 @@ type Stop struct {
 	// Level is nil when stops.txt gives no level_id or names an unknown one.
 	Level  *Level
 	Access StopAccess
+	// Areas are the areas stop_areas.txt lists the stop in. A platform not
+	// listed in any is also in its station's areas; see Area.Contains.
+	Areas []*Area
 }
 
 // Root returns the root stop.
@@ -1766,6 +1769,14 @@ func agenciesByID(agencies []Agency) map[string]*Agency {
 		}
 	}
 	return idToAgency
+}
+
+func areasByID(areas []Area) map[string]*Area {
+	idToArea := make(map[string]*Area, len(areas))
+	for i := range areas {
+		idToArea[areas[i].Id] = &areas[i]
+	}
+	return idToArea
 }
 
 func networksByID(networks []Network) map[string]*Network {

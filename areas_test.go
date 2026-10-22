@@ -150,10 +150,7 @@ func TestAreaContains(t *testing.T) {
 		[]string{"area_id", "station_area", "p2_area", "s_area"},
 		[]string{"area_id,stop_id", "station_area,ST", "p2_area,P2", "s_area,S"},
 	)
-	areas := map[string]*Area{}
-	for i := range static.Areas {
-		areas[static.Areas[i].Id] = &static.Areas[i]
-	}
+	areas := areasByID(static.Areas)
 	stops := stopsByID(static.Stops)
 	for _, tc := range []struct {
 		area, stop string
@@ -188,5 +185,36 @@ func TestAreaContains_PlatformListedWithItsStation(t *testing.T) {
 	a := &static.Areas[0]
 	if !a.Contains(stops["P1"]) || !a.Contains(stops["P2"]) {
 		t.Errorf("Contains(P1), Contains(P2) = %t, %t, want true, true", a.Contains(stops["P1"]), a.Contains(stops["P2"]))
+	}
+}
+
+// Stop.Areas lists the areas stop_areas.txt names for each stop.
+func TestParseAreas_StopAreas(t *testing.T) {
+	static := parseAreasFeed(t,
+		[]string{"area_id", "downtown", "route_426"},
+		[]string{"area_id,stop_id", "downtown,S", "route_426,S", "downtown,ST"},
+	)
+	got := map[string][]string{}
+	for _, stop := range static.Stops {
+		for _, a := range stop.Areas {
+			got[stop.Id] = append(got[stop.Id], a.Id)
+		}
+	}
+	want := map[string][]string{"S": {"downtown", "route_426"}, "ST": {"downtown"}}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("stop areas mismatch (-got +want):\n%s", diff)
+	}
+	areas := areasByID(static.Areas)
+	if s := stopsByID(static.Stops)["S"]; s.Areas[0] != areas["downtown"] {
+		t.Error("Stop.Areas does not point into Static.Areas")
+	}
+}
+
+// A parsed feed with areas must stay comparable with cmp, which panics on
+// unexported fields.
+func TestParseAreas_ComparableWithCmp(t *testing.T) {
+	static := parseAreasFeed(t, []string{"area_id", "a"}, []string{"area_id,stop_id", "a,S"})
+	if diff := cmp.Diff(static.Areas, static.Areas); diff != "" {
+		t.Errorf("Areas differ from themselves:\n%s", diff)
 	}
 }

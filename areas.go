@@ -16,10 +16,6 @@ type Area struct {
 	// station is not expanded into its platforms; use Contains to apply
 	// that rule.
 	Stops []*Stop
-
-	// listed holds every stop that stop_areas.txt lists in any area. It is
-	// shared by all of a feed's areas.
-	listed map[*Stop]bool
 }
 
 // Contains reports whether stop is in the area. A stop is in it if
@@ -30,14 +26,12 @@ func (a *Area) Contains(stop *Stop) bool {
 	if stop == nil {
 		return false
 	}
-	if slices.Contains(a.Stops, stop) {
+	if slices.Contains(stop.Areas, a) {
 		return true
 	}
 	parent := stop.Parent
-	if stop.Type != StopType_Stop || parent == nil || parent.Type != StopType_Station || a.listed[stop] {
-		return false
-	}
-	return slices.Contains(a.Stops, parent)
+	return stop.Type == StopType_Stop && len(stop.Areas) == 0 &&
+		parent != nil && parent.Type == StopType_Station && slices.Contains(parent.Areas, a)
 }
 
 // parseAreas reads areas.txt. A row with an empty or repeated area_id is
@@ -71,7 +65,8 @@ func parseAreas(csv *csv.File) ([]Area, []warnings.StaticWarning) {
 	return areas, w
 }
 
-// parseStopAreas reads stop_areas.txt into the areas' Stops. A row with a
+// parseStopAreas reads stop_areas.txt into the areas' Stops and the stops'
+// Areas. A row with a
 // missing value, an unknown ID, or that repeats an earlier row is skipped
 // with a warning.
 func parseStopAreas(csv *csv.File, areas []Area, stopIdToStop map[string]*Stop) []warnings.StaticWarning {
@@ -82,11 +77,7 @@ func parseStopAreas(csv *csv.File, areas []Area, stopIdToStop map[string]*Stop) 
 		return w
 	}
 
-	areaIdToArea := make(map[string]*Area, len(areas))
-	for i := range areas {
-		areaIdToArea[areas[i].Id] = &areas[i]
-	}
-	listed := map[*Stop]bool{}
+	areaIdToArea := areasByID(areas)
 	type pair struct {
 		area *Area
 		stop *Stop
@@ -110,14 +101,11 @@ func parseStopAreas(csv *csv.File, areas []Area, stopIdToStop map[string]*Stop) 
 			reason = "duplicate row"
 		default:
 			seen[pair{area, stop}] = true
-			listed[stop] = true
 			area.Stops = append(area.Stops, stop)
+			stop.Areas = append(stop.Areas, area)
 			continue
 		}
 		w = append(w, warnings.NewStaticWarning(csv, warnings.StopAreaInvalid{AreaID: areaID, StopID: stopID, Reason: reason}))
-	}
-	for i := range areas {
-		areas[i].listed = listed
 	}
 	return w
 }
