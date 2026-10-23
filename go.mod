@@ -1,13 +1,13 @@
 module github.com/OneBusAway/go-gtfs
 
-go 1.18
+go 1.25.0
 
 require (
 	github.com/fatih/color v1.13.0
+	github.com/google/go-cmp v0.7.0
 	github.com/urfave/cli/v2 v2.3.0
 	golang.org/x/text v0.9.0
-	google.golang.org/protobuf v1.27.1
-	github.com/google/go-cmp v0.5.9
+	google.golang.org/protobuf v1.36.12
 )
 
 require (
@@ -18,3 +18,5 @@ require (
 	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect
 )
+
+tool google.golang.org/protobuf/cmd/protoc-gen-go

@@ -82,6 +82,47 @@ func (w AgencyMissingValues) Error() string {
 	return fmt.Sprintf("agency %q is missing values %s", w.AgencyID, w.Columns)
 }
 
+// FileUnreadable is raised when an optional file that only adds to the feed,
+// such as feed_info.txt, cannot be read as CSV, for example because a row has
+// the wrong number of fields. Rows after the error are ignored, and the rest
+// of the feed is parsed as usual.
+type FileUnreadable struct {
+	Reason string
+}
+
+func (w FileUnreadable) Error() string {
+	return fmt.Sprintf("file could not be fully read: %s", w.Reason)
+}
+
+// FeedInfoExtraRow is raised for each feed_info.txt row after the first.
+// GTFS allows one row. The extra rows are ignored.
+type FeedInfoExtraRow struct{}
+
+func (w FeedInfoExtraRow) Error() string {
+	return "feed_info.txt has more than one row; only the first is read"
+}
+
+// FeedInfoMissingValues is raised when the feed_info.txt row leaves required
+// values empty. The row is still read.
+type FeedInfoMissingValues struct {
+	Columns []string
+}
+
+func (w FeedInfoMissingValues) Error() string {
+	return fmt.Sprintf("feed info is missing values %s", w.Columns)
+}
+
+// FeedInfoInvalidDate is raised when feed_start_date or feed_end_date is not
+// a YYYYMMDD date. The date is read as unset.
+type FeedInfoInvalidDate struct {
+	Column string
+	Value  string
+}
+
+func (w FeedInfoInvalidDate) Error() string {
+	return fmt.Sprintf("feed info %s %q is not a YYYYMMDD date", w.Column, w.Value)
+}
+
 // StopTimeInvalidReference is raised when a stop_times.txt row does not
 // reference exactly one of stop_id, location_id and location_group_id, or
 // references an id (including a booking rule id) that does not resolve.
@@ -155,6 +196,328 @@ type TransferMissingTrip struct {
 
 func (w TransferMissingTrip) Error() string {
 	return fmt.Sprintf("linked-trip transfer is missing %s", w.Column)
+}
+
+// StopInvalidLocationType is raised when a stops.txt row has a location_type
+// that GTFS does not define. Only empty and 0 through 4 are valid. The stop is
+// kept and read as a stop (location_type 0).
+type StopInvalidLocationType struct {
+	StopID string
+	Value  string
+}
+
+func (w StopInvalidLocationType) Error() string {
+	return fmt.Sprintf("stop %q has invalid location_type %q; read as a stop", w.StopID, w.Value)
+}
+
+// StopUnknownLevel is raised when a stops.txt row names a level_id that
+// levels.txt does not define. The stop is kept without a level.
+type StopUnknownLevel struct {
+	StopID  string
+	LevelID string
+}
+
+func (w StopUnknownLevel) Error() string {
+	return fmt.Sprintf("stop %q references unknown level %q", w.StopID, w.LevelID)
+}
+
+// LevelInvalid is raised when a levels.txt row is skipped.
+type LevelInvalid struct {
+	LevelID string
+	Reason  string
+}
+
+func (w LevelInvalid) Error() string {
+	return fmt.Sprintf("level %q is invalid: %s", w.LevelID, w.Reason)
+}
+
+// StopAccessInvalid is raised when a stops.txt row sets a stop_access that
+// is not a valid value, or sets one where GTFS forbids it. The stop is kept
+// with no stop_access.
+type StopAccessInvalid struct {
+	StopID string
+	Value  string
+	Reason string
+}
+
+func (w StopAccessInvalid) Error() string {
+	return fmt.Sprintf("stop %q stop_access %q is ignored: %s", w.StopID, w.Value, w.Reason)
+}
+
+// PathwayInvalid is raised when a pathways.txt row is skipped.
+type PathwayInvalid struct {
+	PathwayID string
+	Reason    string
+}
+
+func (w PathwayInvalid) Error() string {
+	return fmt.Sprintf("pathway %q is invalid: %s", w.PathwayID, w.Reason)
+}
+
+// PathwayInvalidValue is raised when an optional pathways.txt value does not
+// parse or is out of the range GTFS gives for it. The pathway is kept and
+// the value is read as unset.
+type PathwayInvalidValue struct {
+	PathwayID string
+	Column    string
+	Value     string
+}
+
+func (w PathwayInvalidValue) Error() string {
+	return fmt.Sprintf("pathway %q has invalid %s %q; read as unset", w.PathwayID, w.Column, w.Value)
+}
+
+// TranslationInvalid is raised when a translations.txt row is skipped.
+type TranslationInvalid struct {
+	Reason string
+}
+
+func (w TranslationInvalid) Error() string {
+	return fmt.Sprintf("translation is invalid: %s", w.Reason)
+}
+
+// TranslationsWithoutFeedInfo is raised when a feed has translations.txt but
+// no usable feed_info.txt, which GTFS requires alongside it. The translations
+// are still read.
+type TranslationsWithoutFeedInfo struct{}
+
+func (w TranslationsWithoutFeedInfo) Error() string {
+	return "translations.txt is present but feed_info.txt is missing or unusable"
+}
+
+// AttributionInvalid is raised when an attributions.txt row is skipped.
+type AttributionInvalid struct {
+	AttributionID string
+	Reason        string
+}
+
+func (w AttributionInvalid) Error() string {
+	return fmt.Sprintf("attribution %q is invalid: %s", w.AttributionID, w.Reason)
+}
+
+// AttributionWithoutRole is raised when an attributions.txt row sets none
+// of is_producer, is_operator and is_authority to 1, which GTFS recommends.
+// The attribution is kept.
+type AttributionWithoutRole struct {
+	AttributionID string
+}
+
+func (w AttributionWithoutRole) Error() string {
+	return fmt.Sprintf("attribution %q has no role; set is_producer, is_operator or is_authority", w.AttributionID)
+}
+
+// NetworksDefinedTwice is raised when routes.txt sets network_id and the
+// feed also has networks.txt or route_networks.txt, which GTFS forbids. The
+// network files are used and routes.txt network_id is ignored.
+type NetworksDefinedTwice struct{}
+
+func (w NetworksDefinedTwice) Error() string {
+	return "routes.txt network_id is ignored because networks.txt or route_networks.txt is present"
+}
+
+// NetworkInvalid is raised when a networks.txt row is skipped.
+type NetworkInvalid struct {
+	NetworkID string
+	Reason    string
+}
+
+func (w NetworkInvalid) Error() string {
+	return fmt.Sprintf("network %q is invalid: %s", w.NetworkID, w.Reason)
+}
+
+// RouteNetworkInvalid is raised when a route_networks.txt row is skipped.
+type RouteNetworkInvalid struct {
+	RouteID   string
+	NetworkID string
+	Reason    string
+}
+
+func (w RouteNetworkInvalid) Error() string {
+	return fmt.Sprintf("route %q in network %q is skipped: %s", w.RouteID, w.NetworkID, w.Reason)
+}
+
+// AreaInvalid is raised when an areas.txt row is skipped.
+type AreaInvalid struct {
+	AreaID string
+	Reason string
+}
+
+func (w AreaInvalid) Error() string {
+	return fmt.Sprintf("area %q is invalid: %s", w.AreaID, w.Reason)
+}
+
+// StopAreaInvalid is raised when a stop_areas.txt row is skipped.
+type StopAreaInvalid struct {
+	AreaID string
+	StopID string
+	Reason string
+}
+
+func (w StopAreaInvalid) Error() string {
+	return fmt.Sprintf("stop %q in area %q is skipped: %s", w.StopID, w.AreaID, w.Reason)
+}
+
+// FareAttributeInvalid is raised when a fare_attributes.txt row is skipped.
+type FareAttributeInvalid struct {
+	FareID string
+	Reason string
+}
+
+func (w FareAttributeInvalid) Error() string {
+	return fmt.Sprintf("fare %q is invalid: %s", w.FareID, w.Reason)
+}
+
+// FareAttributeInvalidValue is raised when an optional fare_attributes.txt
+// value is invalid. The fare is kept and the value is read as unset.
+type FareAttributeInvalidValue struct {
+	FareID string
+	Column string
+	Value  string
+}
+
+func (w FareAttributeInvalidValue) Error() string {
+	return fmt.Sprintf("fare %q has invalid %s %q; read as unset", w.FareID, w.Column, w.Value)
+}
+
+// FareAttributeAgencyAmbiguous is raised when a fare_attributes.txt row gives
+// no agency_id in a feed with several agencies, where GTFS requires one. The
+// fare is kept with no agency.
+type FareAttributeAgencyAmbiguous struct {
+	FareID string
+}
+
+func (w FareAttributeAgencyAmbiguous) Error() string {
+	return fmt.Sprintf("fare %q has no agency_id but the feed has several agencies", w.FareID)
+}
+
+// FareRuleInvalid is raised when a fare_rules.txt row is skipped.
+type FareRuleInvalid struct {
+	FareID string
+	Reason string
+}
+
+func (w FareRuleInvalid) Error() string {
+	return fmt.Sprintf("fare rule for fare %q is invalid: %s", w.FareID, w.Reason)
+}
+
+// RiderCategoryInvalid is raised when a rider_categories.txt row is skipped.
+type RiderCategoryInvalid struct {
+	RiderCategoryID string
+	Reason          string
+}
+
+func (w RiderCategoryInvalid) Error() string {
+	return fmt.Sprintf("rider category %q is invalid: %s", w.RiderCategoryID, w.Reason)
+}
+
+// FareMediaInvalid is raised when a fare_media.txt row is skipped.
+type FareMediaInvalid struct {
+	FareMediaID string
+	Reason      string
+}
+
+func (w FareMediaInvalid) Error() string {
+	return fmt.Sprintf("fare media %q is invalid: %s", w.FareMediaID, w.Reason)
+}
+
+// FareProductInvalid is raised when a fare_products.txt row is skipped.
+type FareProductInvalid struct {
+	FareProductID string
+	Reason        string
+}
+
+func (w FareProductInvalid) Error() string {
+	return fmt.Sprintf("fare product %q is invalid: %s", w.FareProductID, w.Reason)
+}
+
+// FareProductDefaultCategory is raised when several rider categories are
+// eligible for a fare product but Defaults of them, not exactly one, are the
+// default, which GTFS requires. The product is kept.
+type FareProductDefaultCategory struct {
+	FareProductID string
+	Defaults      int
+}
+
+func (w FareProductDefaultCategory) Error() string {
+	return fmt.Sprintf("fare product %q has %d default rider categories among its eligible ones; want exactly 1", w.FareProductID, w.Defaults)
+}
+
+// TimeframeInvalid is raised when a timeframes.txt row is skipped.
+type TimeframeInvalid struct {
+	TimeframeGroupID string
+	Reason           string
+}
+
+func (w TimeframeInvalid) Error() string {
+	return fmt.Sprintf("timeframe in group %q is invalid: %s", w.TimeframeGroupID, w.Reason)
+}
+
+// TimeframeOverlap is raised when two timeframes.txt rows with the same
+// timeframe_group_id and service_id overlap, which GTFS forbids. Both are
+// kept.
+type TimeframeOverlap struct {
+	TimeframeGroupID string
+	ServiceID        string
+}
+
+func (w TimeframeOverlap) Error() string {
+	return fmt.Sprintf("timeframe group %q has overlapping intervals for service %q", w.TimeframeGroupID, w.ServiceID)
+}
+
+// FareLegRuleInvalid is raised when a fare_leg_rules.txt row is skipped.
+// Since an unset field in a leg rule matches what the other rules leave out,
+// a skipped rule can change what the remaining rules match.
+type FareLegRuleInvalid struct {
+	LegGroupID string
+	Reason     string
+}
+
+func (w FareLegRuleInvalid) Error() string {
+	return fmt.Sprintf("fare leg rule in group %q is invalid: %s", w.LegGroupID, w.Reason)
+}
+
+// FareLegJoinRuleInvalid is raised when a fare_leg_join_rules.txt row is
+// skipped.
+type FareLegJoinRuleInvalid struct {
+	Reason string
+}
+
+func (w FareLegJoinRuleInvalid) Error() string {
+	return fmt.Sprintf("fare leg join rule is invalid: %s", w.Reason)
+}
+
+// FareTransferRuleInvalid is raised when a fare_transfer_rules.txt row is
+// skipped. Since an empty leg group matches the groups other rules leave
+// out, a skipped rule can change what the remaining rules match.
+type FareTransferRuleInvalid struct {
+	Reason string
+}
+
+func (w FareTransferRuleInvalid) Error() string {
+	return fmt.Sprintf("fare transfer rule is invalid: %s", w.Reason)
+}
+
+// TransferMissingStop is raised when a transfers.txt row that does not link
+// trips (transfer_type empty or 0 to 3) leaves from_stop_id or to_stop_id
+// empty. GTFS requires both for these types. The row is skipped.
+type TransferMissingStop struct {
+	Column string
+}
+
+func (w TransferMissingStop) Error() string {
+	return fmt.Sprintf("transfer is missing %s", w.Column)
+}
+
+// TransferInvalidType is raised when a transfers.txt row has a transfer_type
+// that GTFS does not define. Only empty and 0 through 5 are valid. The row is
+// skipped, because reading the value as some other type could change what
+// the rule means.
+type TransferInvalidType struct {
+	Value string
+}
+
+func (w TransferInvalidType) Error() string {
+	return fmt.Sprintf("transfer has invalid transfer_type %q", w.Value)
 }
 
 // TransferUnknownReference is raised when a transfers.txt row names a stop,

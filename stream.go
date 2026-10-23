@@ -84,9 +84,9 @@ func (s *StaticStream) StopTimeCount(tripIndex int) int {
 
 // countStopTimeRows counts each trip's stop times and returns the warnings
 // for the rows it drops, which EachTripStopTimes doesn't report again.
-func (s *StaticStream) countStopTimeRows(file *csv.File, static *Static) []warnings.StaticWarning {
+func (s *StaticStream) countStopTimeRows(file *csv.File, static *Static, stopIdToStop map[string]*Stop) []warnings.StaticWarning {
 	s.stopTimeCounts = make([]int, len(static.Trips))
-	s.refs = newStopTimeReferences(static)
+	s.refs = newStopTimeReferences(static, stopIdToStop)
 	reader, missing := newStopTimeReader(file, s.refs)
 	if missing != nil {
 		return missingColumnsWarning(file, missing)
@@ -121,7 +121,7 @@ func (s *StaticStream) countShapeRows(file *csv.File) {
 // time, say) most of the file. It stops at the first error fn returns and
 // returns it.
 func (s *StaticStream) EachTripStopTimes(fn func(tripIndex int, stopTimes []ScheduledStopTime) error) error {
-	file, err := s.open("stop_times.txt")
+	file, err := s.open(constants.StopTimesFile)
 	if err != nil {
 		return err
 	}
@@ -154,7 +154,7 @@ func (s *StaticStream) EachShape(fn func(Shape) error) error {
 	if len(s.shapeRowCounts) == 0 {
 		return nil
 	}
-	file, err := s.open("shapes.txt")
+	file, err := s.open(constants.ShapesFile)
 	if err != nil {
 		return err
 	}

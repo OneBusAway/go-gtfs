@@ -283,7 +283,7 @@ func ParseRealtime(content []byte, opts *ParseRealtimeOptions) (*Realtime, error
 	}
 	feedMessage := &gtfsrt.FeedMessage{}
 	if err := proto.Unmarshal(content, feedMessage); err != nil {
-		return nil, fmt.Errorf("failed to parse input as a GTFS Realtime message: %s", err)
+		return nil, fmt.Errorf("failed to parse input as a GTFS Realtime message: %w", err)
 	}
 	var result Realtime
 	if t := feedMessage.GetHeader().Timestamp; t != nil {

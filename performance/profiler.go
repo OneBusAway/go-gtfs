@@ -33,7 +33,9 @@ func run() error {
 
 	fmt.Println("starting profile")
 	var profile bytes.Buffer
-	pprof.StartCPUProfile(&profile)
+	if err := pprof.StartCPUProfile(&profile); err != nil {
+		return err
+	}
 	for i, in := range gtfsBytes {
 		fmt.Printf("parsing file %d/%d\n", i+1, len(gtfsBytes))
 		_, err := gtfs.ParseStatic(in, gtfs.ParseStaticOptions{})
@@ -44,6 +46,5 @@ func run() error {
 	pprof.StopCPUProfile()
 
 	fmt.Println("writing profile to", *out)
-	os.WriteFile(*out, profile.Bytes(), 0644)
-	return nil
+	return os.WriteFile(*out, profile.Bytes(), 0644)
 }

@@ -40,6 +40,41 @@ func parseBikesAllowed(s string) BikesAllowed {
 	}
 }
 
+// CarsAllowed describes whether cars are allowed on a scheduled trip.
+//
+// This is a Go representation of the enum described in the `cars_allowed` field of `trips.txt`.
+type CarsAllowed int32
+
+const (
+	CarsAllowed_NotSpecified CarsAllowed = 0
+	CarsAllowed_Allowed      CarsAllowed = 1
+	CarsAllowed_NotAllowed   CarsAllowed = 2
+)
+
+func (c CarsAllowed) String() string {
+	switch c {
+	case CarsAllowed_NotSpecified:
+		return "NOT_SPECIFIED"
+	case CarsAllowed_Allowed:
+		return "ALLOWED"
+	case CarsAllowed_NotAllowed:
+		return "NOT_ALLOWED"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+func parseCarsAllowed(s string) CarsAllowed {
+	switch s {
+	case "1":
+		return CarsAllowed_Allowed
+	case "2":
+		return CarsAllowed_NotAllowed
+	default:
+		return CarsAllowed_NotSpecified
+	}
+}
+
 // DirectionID is a mechanism for distinguishing between trips going in the opposite direction.
 type DirectionID uint8
 
@@ -888,18 +923,23 @@ const (
 	StopType_Platform StopType = 5
 )
 
-func parseStopType(s string) StopType {
-	switch s {
+// parseStopType reads a stops.txt location_type, ignoring surrounding
+// whitespace. Empty means 0. ok is false for any value GTFS does not define,
+// which is read as StopType_Stop.
+func parseStopType(s string) (t StopType, ok bool) {
+	switch strings.TrimSpace(s) {
+	case "", "0":
+		return StopType_Stop, true
 	case "1":
-		return StopType_Station
+		return StopType_Station, true
 	case "2":
-		return StopType_EntranceOrExit
+		return StopType_EntranceOrExit, true
 	case "3":
-		return StopType_GenericNode
+		return StopType_GenericNode, true
 	case "4":
-		return StopType_BoardingArea
+		return StopType_BoardingArea, true
 	default:
-		return StopType_Stop
+		return StopType_Stop, false
 	}
 }
 
@@ -940,20 +980,24 @@ const (
 	TransferType_InSeatNotAllowed TransferType = 5
 )
 
-func parseTransferType(s string) TransferType {
-	switch s {
+// parseTransferType reads a transfers.txt transfer_type, ignoring surrounding
+// whitespace. Empty means 0. ok is false for any value GTFS does not define.
+func parseTransferType(s string) (t TransferType, ok bool) {
+	switch strings.TrimSpace(s) {
+	case "", "0":
+		return TransferType_Recommended, true
 	case "1":
-		return TransferType_Timed
+		return TransferType_Timed, true
 	case "2":
-		return TransferType_RequiresTime
+		return TransferType_RequiresTime, true
 	case "3":
-		return TransferType_NotPossible
+		return TransferType_NotPossible, true
 	case "4":
-		return TransferType_InSeat
+		return TransferType_InSeat, true
 	case "5":
-		return TransferType_InSeatNotAllowed
+		return TransferType_InSeatNotAllowed, true
 	default:
-		return TransferType_Recommended
+		return TransferType_Recommended, false
 	}
 }
 

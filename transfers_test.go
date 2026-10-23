@@ -259,16 +259,80 @@ func TestParseTransfers(t *testing.T) {
 			wantSummary: []string{"from=ST to=S1 fromRoute= toRoute= fromTrip= toTrip= type=REQUIRES_TIME min=60"},
 		},
 		{
-			desc:      "minimum time transfer without from_stop_id is skipped",
-			transfers: []string{header, ",S2,,,,,2,180"},
+			desc:         "minimum time transfer without from_stop_id is skipped",
+			transfers:    []string{header, ",S2,,,,,2,180"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferMissingStop{Column: "from_stop_id"}},
 		},
 		{
-			desc:      "recommended transfer without to_stop_id is skipped",
-			transfers: []string{header, "S1,,,,,,0,"},
+			desc:         "recommended transfer without to_stop_id is skipped",
+			transfers:    []string{header, "S1,,,,,,0,"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferMissingStop{Column: "to_stop_id"}},
 		},
 		{
 			desc:      "empty transfer_type without stop ids is skipped",
 			transfers: []string{header, ",,,,T1,T2,,"},
+			wantWarnings: []warnings.StaticWarningKind{
+				warnings.TransferMissingStop{Column: "from_stop_id"},
+				warnings.TransferMissingStop{Column: "to_stop_id"},
+			},
+		},
+		{
+			desc:      "file without stop id columns warns once for stop transfers",
+			transfers: []string{"from_trip_id,to_trip_id,transfer_type", "T1,T2,2", "T2,T1,2"},
+			wantWarnings: []warnings.StaticWarningKind{
+				warnings.MissingColumns{Columns: []string{"from_stop_id", "to_stop_id"}},
+			},
+		},
+		{
+			desc:         "file without from_stop_id column warns once for stop transfers",
+			transfers:    []string{"to_stop_id,transfer_type", "S1,2", "S2,1"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.MissingColumns{Columns: []string{"from_stop_id"}}},
+		},
+		{
+			desc:        "file without stop id columns keeps linked trips",
+			transfers:   []string{"from_trip_id,to_trip_id,transfer_type", "T1,T2,4", "T1,T2,2", "T2,T1,5"},
+			wantSummary: []string{"from= to= fromRoute= toRoute= fromTrip=T1 toTrip=T2 type=IN_SEAT min=<nil>", "from= to= fromRoute= toRoute= fromTrip=T2 toTrip=T1 type=IN_SEAT_NOT_ALLOWED min=<nil>"},
+			wantWarnings: []warnings.StaticWarningKind{
+				warnings.MissingColumns{Columns: []string{"from_stop_id", "to_stop_id"}},
+			},
+		},
+		{
+			desc:        "empty transfer_type is a recommended transfer",
+			transfers:   []string{header, "S1,S2,,,,,,"},
+			wantSummary: []string{"from=S1 to=S2 fromRoute= toRoute= fromTrip= toTrip= type=RECOMMENDED min=<nil>"},
+		},
+		{
+			desc:        "transfer_type 0 is a recommended transfer",
+			transfers:   []string{header, "S1,S2,,,,,0,"},
+			wantSummary: []string{"from=S1 to=S2 fromRoute= toRoute= fromTrip= toTrip= type=RECOMMENDED min=<nil>"},
+		},
+		{
+			desc:        "padded transfer_type is trimmed",
+			transfers:   []string{header, ",,,,T1,T2, 4,"},
+			wantSummary: []string{"from= to= fromRoute= toRoute= fromTrip=T1 toTrip=T2 type=IN_SEAT min=<nil>"},
+		},
+		{
+			desc:         "out-of-range transfer_type is skipped",
+			transfers:    []string{header, "S1,S2,,,,,6,"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferInvalidType{Value: "6"}},
+		},
+		{
+			desc:         "non-numeric transfer_type is skipped",
+			transfers:    []string{header, "S1,S2,,,,,abc,"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferInvalidType{Value: "abc"}},
+		},
+		{
+			desc:         "invalid transfer_type is reported before missing trip ids",
+			transfers:    []string{header, ",,,,,,9,"},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferInvalidType{Value: "9"}},
+		},
+		{
+			desc:      "invalid transfer_type skips only its own row",
+			transfers: []string{header, "S1,S2,,,,,-1,", "S1,S2,,,,,1,"},
+			wantSummary: []string{
+				"from=S1 to=S2 fromRoute= toRoute= fromTrip= toTrip= type=TIMED min=<nil>",
+			},
+			wantWarnings: []warnings.StaticWarningKind{warnings.TransferInvalidType{Value: "-1"}},
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
@@ -298,21 +362,30 @@ func TestParseTransfers_WarningPointsAtRow(t *testing.T) {
 	}
 }
 
-func TestTransferTypeString(t *testing.T) {
+func TestParseTransferType(t *testing.T) {
 	for _, tc := range []struct {
-		in   string
-		want string
+		in     string
+		want   string
+		wantOK bool
 	}{
-		{"", "RECOMMENDED"},
-		{"0", "RECOMMENDED"},
-		{"1", "TIMED"},
-		{"2", "REQUIRES_TIME"},
-		{"3", "NOT_POSSIBLE"},
-		{"4", "IN_SEAT"},
-		{"5", "IN_SEAT_NOT_ALLOWED"},
+		{"", "RECOMMENDED", true},
+		{"0", "RECOMMENDED", true},
+		{"1", "TIMED", true},
+		{"2", "REQUIRES_TIME", true},
+		{"3", "NOT_POSSIBLE", true},
+		{"4", "IN_SEAT", true},
+		{"5", "IN_SEAT_NOT_ALLOWED", true},
+		{" 4", "IN_SEAT", true},
+		{"2 ", "REQUIRES_TIME", true},
+		{" ", "RECOMMENDED", true},
+		{"6", "RECOMMENDED", false},
+		{"-1", "RECOMMENDED", false},
+		{"1.0", "RECOMMENDED", false},
+		{"abc", "RECOMMENDED", false},
 	} {
-		if got := parseTransferType(tc.in).String(); got != tc.want {
-			t.Errorf("parseTransferType(%q).String() = %q, want %q", tc.in, got, tc.want)
+		got, ok := parseTransferType(tc.in)
+		if got.String() != tc.want || ok != tc.wantOK {
+			t.Errorf("parseTransferType(%q) = %s, %t, want %s, %t", tc.in, got, ok, tc.want, tc.wantOK)
 		}
 	}
 }

@@ -25,6 +25,11 @@ this package is under active development and backwards incompatible changes are 
 We're eventually planning to release a `v1.0.0` version, and after that all changes
 will be backwards compatible and consistent with semantic versioning.
 
+**Go version support**:
+this package supports the current Go release and the two releases before it.
+When a new Go release comes out, the minimum version in `go.mod` moves up to match.
+The minimum is currently Go 1.25.
+
 ## Examples
 
 Parse the GTFS static feed for the New York City Subway:
@@ -59,41 +64,43 @@ fmt.Printf("The SF BART currently has %d trains running or scheduled\n", len(rea
 
 ## Supported GTFS Schedule files
 
-Below is a list of the GTFS schedule files and whether they are currently supported. Progress for full support is being tracked in issue [#4](https://github.com/jamespfennell/gtfs/issues/4).
+The table lists every file in the [GTFS Schedule reference](https://gtfs.org/documentation/schedule/reference/) as revised on April 27, 2026,
+and whether the parser reads it. Please report gaps in this repository's [issues](https://github.com/OneBusAway/go-gtfs/issues).
 
-| File Name                                                                                              | Supported | Required by Spec        | Notes                                                       |
-| ------------------------------------------------------------------------------------------------------ | --------- | ----------------------- | ----------------------------------------------------------- |
-| [agency.txt](https://gtfs.org/documentation/schedule/reference/#agencytxt)                             | ✅        | Required                |                                                             |
-| [stops.txt](https://gtfs.org/documentation/schedule/reference/#stopstxt)                               | ✅        | Conditionally Required  | Optional only when locations.geojson is present              |
-| [routes.txt](https://gtfs.org/documentation/schedule/reference/#routestxt)                             | ✅        | Required                |                                                             |
-| [trips.txt](https://gtfs.org/documentation/schedule/reference/#tripstxt)                               | ✅        | Required                |                                                             |
-| [stop_times.txt](https://gtfs.org/documentation/schedule/reference/#stop_timestxt)                     | ✅        | Required                |                                                             |
-| [calendar.txt](https://gtfs.org/documentation/schedule/reference/#calendartxt)                         | ✅        | Conditionally Required  | Surfaced as a `Service`, always required by library         |
-| [calendar_dates.txt](https://gtfs.org/documentation/schedule/reference/#calendar_datestxt)             | ✅        | Conditionally Required  | Surfaced as part of a `Service`, always required by library |
-| [fare_attributes.txt](https://gtfs.org/documentation/schedule/reference/#fare_attributestxt)           | ❌        | Optional                |                                                             |
-| [fare_rules.txt](https://gtfs.org/documentation/schedule/reference/#fare_rulestxt)                     | ❌        | Optional                |                                                             |
-| [timeframes.txt](https://gtfs.org/documentation/schedule/reference/#timeframestxt)                     | ❌        | Optional                |                                                             |
-| [fare_media.txt](https://gtfs.org/documentation/schedule/reference/#fare_mediatxt)                     | ❌        | Optional                |                                                             |
-| [fare_products.txt](https://gtfs.org/documentation/schedule/reference/#fare_productstxt)                   | ❌        | Optional                |                                                             |
-| [fare_leg_rules.txt](https://gtfs.org/documentation/schedule/reference/#fare_leg_rulestxt)                 | ❌        | Optional                |                                                             |
-| [fare_leg_join_rules.txt](https://gtfs.org/documentation/schedule/reference/#fare_leg_join_rulestxt)       | ❌        | Optional                |                                                             |
-| [fare_transfer_rules.txt](https://gtfs.org/documentation/schedule/reference/#fare_transfer_rulestxt)       | ❌        | Optional                |                                                             |
-| [areas.txt](https://gtfs.org/documentation/schedule/reference/#areastxt)                               | ❌        | Optional                |                                                             |
-| [stop_areas.txt](https://gtfs.org/documentation/schedule/reference/#stop_areastxt)                     | ❌        | Optional                |                                                             |
-| [networks.txt](https://gtfs.org/documentation/schedule/reference/#networkstxt)                         | ❌        | Conditionally Forbidden |                                                             |
-| [route_networks.txt](https://gtfs.org/documentation/schedule/reference/#route_networkstxt)             | ❌        | Conditionally Forbidden |                                                             |
-| [location_groups.txt](https://gtfs.org/documentation/schedule/reference/#location_groupstxt)           | ✅        | Optional                |                                                             |
-| [shapes.txt](https://gtfs.org/documentation/schedule/reference/#shapestxt)                             | ✅        | Optional                |                                                             |
-| [frequencies.txt](https://gtfs.org/documentation/schedule/reference/#frequenciestxt)                   | ✅        | Optional                |                                                             |
-| [transfers.txt](https://gtfs.org/documentation/schedule/reference/#transferstxt)                       | 🟨        | Optional                | Partially implemented                                       |
-| [pathways.txt](https://gtfs.org/documentation/schedule/reference/#pathwaystxt)                         | ❌        | Optional                |                                                             |
-| [levels.txt](https://gtfs.org/documentation/schedule/reference/#levelstxt)                             | ❌        | Conditionally Required  |                                                             |
-| [location_group_stops.txt](https://gtfs.org/documentation/schedule/reference/#location_group_stopstxt) | ✅        | Optional                |                                                             |
-| [locations.geojson](https://gtfs.org/documentation/schedule/reference/#locationsgeojson)               | ✅        | Optional                | Polygon and MultiPolygon only                               |
-| [booking_rules.txt](https://gtfs.org/documentation/schedule/reference/#booking_rulestxt)               | ✅        | Optional                |                                                             |
-| [translations.txt](https://gtfs.org/documentation/schedule/reference/#translationstxt)                 | ❌        | Optional                |                                                             |
-| [feed_info.txt](https://gtfs.org/documentation/schedule/reference/#feed_infotxt)                       | ❌        | Conditionally Required  |                                                             |
-| [attributions.txt](https://gtfs.org/documentation/schedule/reference/#attributionstxt)                 | ❌        | Optional                |                                                             |
+| File Name                                                                                              | Supported | Required by Spec        | Notes                                                                                                                                                                                                                |
+| ------------------------------------------------------------------------------------------------------ | --------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [agency.txt](https://gtfs.org/documentation/schedule/reference/#agencytxt)                             | ✅         | Required                |                                                                                                                                                                                                                      |
+| [stops.txt](https://gtfs.org/documentation/schedule/reference/#stopstxt)                               | ✅         | Conditionally Required  | Optional only when locations.geojson is present                                                                                                                                                                      |
+| [routes.txt](https://gtfs.org/documentation/schedule/reference/#routestxt)                             | ✅         | Required                |                                                                                                                                                                                                                      |
+| [trips.txt](https://gtfs.org/documentation/schedule/reference/#tripstxt)                               | ✅         | Required                |                                                                                                                                                                                                                      |
+| [stop_times.txt](https://gtfs.org/documentation/schedule/reference/#stop_timestxt)                     | ✅         | Required                |                                                                                                                                                                                                                      |
+| [calendar.txt](https://gtfs.org/documentation/schedule/reference/#calendartxt)                         | ✅         | Conditionally Required  | Surfaced as a `Service`. GTFS requires it unless calendar_dates.txt defines every date of service; the library treats it as optional                                                                                 |
+| [calendar_dates.txt](https://gtfs.org/documentation/schedule/reference/#calendar_datestxt)             | ✅         | Conditionally Required  | Surfaced as part of a `Service`. Optional to the library                                                                                                                                                             |
+| [fare_attributes.txt](https://gtfs.org/documentation/schedule/reference/#fare_attributestxt)           | ✅         | Optional                | GTFS-Fares V1 ([#30](https://github.com/OneBusAway/go-gtfs/issues/30))                                                                                                                                               |
+| [fare_rules.txt](https://gtfs.org/documentation/schedule/reference/#fare_rulestxt)                     | ✅         | Optional                | GTFS-Fares V1 ([#30](https://github.com/OneBusAway/go-gtfs/issues/30))                                                                                                                                               |
+| [timeframes.txt](https://gtfs.org/documentation/schedule/reference/#timeframestxt)                     | ✅         | Optional                | GTFS-Fares V2 ([#31](https://github.com/OneBusAway/go-gtfs/issues/31))                                                                                                                                               |
+| [rider_categories.txt](https://gtfs.org/documentation/schedule/reference/#rider_categoriestxt)         | ✅         | Optional                | GTFS-Fares V2 ([#31](https://github.com/OneBusAway/go-gtfs/issues/31))                                                                                                                                               |
+| [fare_media.txt](https://gtfs.org/documentation/schedule/reference/#fare_mediatxt)                     | ✅         | Optional                | GTFS-Fares V2 ([#31](https://github.com/OneBusAway/go-gtfs/issues/31))                                                                                                                                               |
+| [fare_products.txt](https://gtfs.org/documentation/schedule/reference/#fare_productstxt)               | ✅         | Optional                | GTFS-Fares V2 ([#31](https://github.com/OneBusAway/go-gtfs/issues/31))                                                                                                                                               |
+| [fare_leg_rules.txt](https://gtfs.org/documentation/schedule/reference/#fare_leg_rulestxt)             | ✅         | Optional                | GTFS-Fares V2 ([#31](https://github.com/OneBusAway/go-gtfs/issues/31))                                                                                                                                               |
+| [fare_leg_join_rules.txt](https://gtfs.org/documentation/schedule/reference/#fare_leg_join_rulestxt)   | ✅         | Optional                | GTFS-Fares V2 ([#31](https://github.com/OneBusAway/go-gtfs/issues/31))                                                                                                                                               |
+| [fare_transfer_rules.txt](https://gtfs.org/documentation/schedule/reference/#fare_transfer_rulestxt)   | ✅         | Optional                | GTFS-Fares V2 ([#31](https://github.com/OneBusAway/go-gtfs/issues/31))                                                                                                                                               |
+| [areas.txt](https://gtfs.org/documentation/schedule/reference/#areastxt)                               | ✅         | Optional                |                                                                                                                                                                                                                      |
+| [stop_areas.txt](https://gtfs.org/documentation/schedule/reference/#stop_areastxt)                     | ✅         | Optional                |                                                                                                                                                                                                                      |
+| [networks.txt](https://gtfs.org/documentation/schedule/reference/#networkstxt)                         | ✅         | Conditionally Forbidden |                                                                                                                                                                                                                      |
+| [route_networks.txt](https://gtfs.org/documentation/schedule/reference/#route_networkstxt)             | ✅         | Conditionally Forbidden |                                                                                                                                                                                                                      |
+| [location_groups.txt](https://gtfs.org/documentation/schedule/reference/#location_groupstxt)           | ✅         | Optional                |                                                                                                                                                                                                                      |
+| [shapes.txt](https://gtfs.org/documentation/schedule/reference/#shapestxt)                             | ✅         | Optional                |                                                                                                                                                                                                                      |
+| [frequencies.txt](https://gtfs.org/documentation/schedule/reference/#frequenciestxt)                   | ✅         | Optional                |                                                                                                                                                                                                                      |
+| [transfers.txt](https://gtfs.org/documentation/schedule/reference/#transferstxt)                       | ✅         | Optional                | [#17](https://github.com/OneBusAway/go-gtfs/issues/17), [#18](https://github.com/OneBusAway/go-gtfs/issues/18), [#19](https://github.com/OneBusAway/go-gtfs/issues/19); see [upgrading](#transferstxt-and-upgrading) |
+| [pathways.txt](https://gtfs.org/documentation/schedule/reference/#pathwaystxt)                         | ✅         | Optional                |                                                                                                                                                                                                                      |
+| [levels.txt](https://gtfs.org/documentation/schedule/reference/#levelstxt)                             | ✅         | Conditionally Required  |                                                                                                                                                                                                                      |
+| [location_group_stops.txt](https://gtfs.org/documentation/schedule/reference/#location_group_stopstxt) | ✅         | Optional                |                                                                                                                                                                                                                      |
+| [locations.geojson](https://gtfs.org/documentation/schedule/reference/#locationsgeojson)               | ✅         | Optional                | Polygon and MultiPolygon only                                                                                                                                                                                        |
+| [booking_rules.txt](https://gtfs.org/documentation/schedule/reference/#booking_rulestxt)               | ✅         | Optional                |                                                                                                                                                                                                                      |
+| [translations.txt](https://gtfs.org/documentation/schedule/reference/#translationstxt)                 | ✅         | Optional                |                                                                                                                                                                                                                      |
+| [feed_info.txt](https://gtfs.org/documentation/schedule/reference/#feed_infotxt)                       | ✅         | Conditionally Required  |                                                                                                                                                                                                                      |
+| [attributions.txt](https://gtfs.org/documentation/schedule/reference/#attributionstxt)                 | ✅         | Optional                |                                                                                                                                                                                                                      |
 
 ## GTFS-Flex and upgrading
 
@@ -121,10 +128,25 @@ earlier versions should note:
   `LocationsFileInvalid` warning; a single unusable Feature is skipped with a
   `LocationInvalidGeometry` warning. Neither stops the rest of the feed from parsing.
 
+## stops.txt and upgrading
+
+The parser reads `location_type` as GTFS defines it. Users upgrading from earlier versions
+should note:
+
+- A stop with a parent station is no longer read as `StopType_Platform`. It is read as its
+  `location_type`, usually `StopType_Stop`. To tell a platform from a standalone stop, check
+  `stop.Parent != nil`. `StopType_Platform` is deprecated and never produced.
+- A `location_type` that is not empty or `0` through `4` adds a `StopInvalidLocationType`
+  warning. The stop is still kept as `StopType_Stop`, as before. Whitespace around the value is
+  ignored, so ` 1` now parses as `StopType_Station`.
+
 ## transfers.txt and upgrading
 
 - `transfer_type` values `4` and `5` (linked trips) now parse as `TransferType_InSeat` and
   `TransferType_InSeatNotAllowed`. Earlier versions read them as `TransferType_Recommended`.
+- A row whose `transfer_type` is not empty or `0` through `5` is skipped with a
+  `TransferInvalidType` warning. Earlier versions read it as `TransferType_Recommended`.
+  Whitespace around the value is ignored, so ` 2` now parses as `TransferType_RequiresTime`.
 - For linked trips, `from_stop_id` and `to_stop_id` are optional, so `Transfer.From` and
   `Transfer.To` may be nil. Check them before use.
 - A linked-trip row without a known `from_trip_id` and `to_trip_id` is skipped with a
@@ -141,6 +163,10 @@ earlier versions should note:
   to every route or trip at the stop.
 - A row whose `from_stop_id` or `to_stop_id` is not defined in `stops.txt` is skipped with a
   `TransferUnknownReference` warning. Earlier versions skipped it with only a log line.
+- A row of `transfer_type` empty or `0` to `3` with an empty `from_stop_id` or `to_stop_id` is
+  skipped with a `TransferMissingStop` warning. If the file has no `from_stop_id` or
+  `to_stop_id` column, the first such row adds one `MissingColumns` warning for the file.
+  Earlier versions skipped these rows with only a log line.
 
 ## Performance
 
@@ -163,3 +189,14 @@ The rough breakdown is:
 ### Realtime parser
 
 TBD
+
+## Regenerating the protobuf code
+
+The `proto` subpackage is generated from the `.proto` files next to it. After editing a
+`.proto` file, install [buf](https://buf.build/docs/cli/installation/) (CI uses v1.73.0) and run:
+
+```sh
+buf generate
+```
+
+CI fails if the committed code is out of date.
