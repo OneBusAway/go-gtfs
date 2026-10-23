@@ -1074,13 +1074,13 @@ const (
 func (c CemvSupport) String() string {
 	switch c {
 	case CemvSupport_NotSpecified:
-		return "NotSpecified"
+		return "NOT_SPECIFIED"
 	case CemvSupport_Supported:
-		return "Supported"
+		return "SUPPORTED"
 	case CemvSupport_NotSupported:
-		return "NotSupported"
+		return "NOT_SUPPORTED"
 	default:
-		return "Unknown"
+		return "UNKNOWN"
 	}
 }
 

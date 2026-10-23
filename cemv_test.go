@@ -7,10 +7,10 @@ func TestCemvSupportString(t *testing.T) {
 		in   CemvSupport
 		want string
 	}{
-		{CemvSupport_NotSpecified, "NotSpecified"},
-		{CemvSupport_Supported, "Supported"},
-		{CemvSupport_NotSupported, "NotSupported"},
-		{CemvSupport(99), "Unknown"},
+		{CemvSupport_NotSpecified, "NOT_SPECIFIED"},
+		{CemvSupport_Supported, "SUPPORTED"},
+		{CemvSupport_NotSupported, "NOT_SUPPORTED"},
+		{CemvSupport(99), "UNKNOWN"},
 	} {
 		if got := tc.in.String(); got != tc.want {
 			t.Errorf("CemvSupport(%d).String() = %q, want %q", int32(tc.in), got, tc.want)
