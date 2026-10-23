@@ -125,6 +125,7 @@ func (r *Route) EffectiveCemvSupport() CemvSupport {
 	}
 	return CemvSupport_NotSpecified
 }
+
 type Stop struct {
 	Id                 string
 	Code               string
