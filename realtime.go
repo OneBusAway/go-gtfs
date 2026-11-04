@@ -203,6 +203,11 @@ type Alert struct {
 	// like any other entity without a payload: nothing in it says it was
 	// an alert, and the GTFS-realtime spec requires the payload.
 	IsDeleted bool
+	// HasEffect is set when the feed includes the effect field, even when
+	// its value is UNKNOWN_EFFECT. A missing field also reads as
+	// UNKNOWN_EFFECT in Effect (the proto default), so this is the only way
+	// to tell the two apart.
+	HasEffect bool
 }
 
 type AlertCause = gtfsrt.Alert_Cause
@@ -679,6 +684,7 @@ func parseAlert(ID string, alert *gtfsrt.Alert, opts *ParseRealtimeOptions) (*Al
 		ActivePeriods:    activePeriods,
 		Cause:            alert.GetCause(),
 		Effect:           alert.GetEffect(),
+		HasEffect:        alert.Effect != nil,
 		InformedEntities: informedEntities,
 		Header:           buildAlertText(alert.GetHeaderText()),
 		Description:      buildAlertText(alert.GetDescriptionText()),
