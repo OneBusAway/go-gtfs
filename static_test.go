@@ -17,6 +17,13 @@ import (
 var (
 	may4 = time.Date(2022, 5, 4, 0, 0, 0, 0, time.UTC)
 	may7 = time.Date(2022, 5, 7, 0, 0, 0, 0, time.UTC)
+
+	dec25 = time.Date(2023, 12, 25, 0, 0, 0, 0, time.UTC)
+	jan1  = time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	jan15 = time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
+	jan31 = time.Date(2024, 1, 31, 0, 0, 0, 0, time.UTC)
+	feb10 = time.Date(2024, 2, 10, 0, 0, 0, 0, time.UTC)
+	mar15 = time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC)
 )
 
 func TestParse(t *testing.T) {
@@ -666,6 +673,111 @@ func TestParse(t *testing.T) {
 						EndDate:      may7,
 						AddedDates:   []time.Time{may4},
 						RemovedDates: []time.Time{may7},
+					},
+				},
+			},
+		},
+		{
+			desc: "calendar.txt with removed date after range",
+			content: newZipBuilder().add(
+				"calendar.txt",
+				"service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n"+
+					"a,1,1,1,1,1,0,0,20240101,20240131",
+			).add(
+				"calendar_dates.txt",
+				"service_id,date,exception_type\na,20240315,2",
+			).build(),
+			expected: &Static{
+				Services: []Service{
+					{
+						Id:           "a",
+						Monday:       true,
+						Tuesday:      true,
+						Wednesday:    true,
+						Thursday:     true,
+						Friday:       true,
+						StartDate:    jan1,
+						EndDate:      jan31,
+						RemovedDates: []time.Time{mar15},
+					},
+				},
+			},
+		},
+		{
+			desc: "calendar.txt with added date after range",
+			content: newZipBuilder().add(
+				"calendar.txt",
+				"service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n"+
+					"a,1,1,1,1,1,0,0,20240101,20240131",
+			).add(
+				"calendar_dates.txt",
+				"service_id,date,exception_type\na,20240210,1",
+			).build(),
+			expected: &Static{
+				Services: []Service{
+					{
+						Id:         "a",
+						Monday:     true,
+						Tuesday:    true,
+						Wednesday:  true,
+						Thursday:   true,
+						Friday:     true,
+						StartDate:  jan1,
+						EndDate:    jan31,
+						AddedDates: []time.Time{feb10},
+					},
+				},
+			},
+		},
+		{
+			desc: "calendar.txt with added date inside range",
+			content: newZipBuilder().add(
+				"calendar.txt",
+				"service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n"+
+					"a,1,1,1,1,1,0,0,20240101,20240131",
+			).add(
+				"calendar_dates.txt",
+				"service_id,date,exception_type\na,20240115,1",
+			).build(),
+			expected: &Static{
+				Services: []Service{
+					{
+						Id:         "a",
+						Monday:     true,
+						Tuesday:    true,
+						Wednesday:  true,
+						Thursday:   true,
+						Friday:     true,
+						StartDate:  jan1,
+						EndDate:    jan31,
+						AddedDates: []time.Time{jan15},
+					},
+				},
+			},
+		},
+		{
+			desc: "calendar.txt with added and removed dates outside range",
+			content: newZipBuilder().add(
+				"calendar.txt",
+				"service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n"+
+					"a,1,1,1,1,1,0,0,20240101,20240131",
+			).add(
+				"calendar_dates.txt",
+				"service_id,date,exception_type\na,20231225,1\na,20240315,2",
+			).build(),
+			expected: &Static{
+				Services: []Service{
+					{
+						Id:           "a",
+						Monday:       true,
+						Tuesday:      true,
+						Wednesday:    true,
+						Thursday:     true,
+						Friday:       true,
+						StartDate:    jan1,
+						EndDate:      jan31,
+						AddedDates:   []time.Time{dec25},
+						RemovedDates: []time.Time{mar15},
 					},
 				},
 			},

@@ -152,6 +152,9 @@ type Transfer struct {
 	ToTrip   *ScheduledTrip
 }
 
+// Service is a set of dates on which trips run. StartDate and EndDate are the
+// service's start_date and end_date from calendar.txt. For a service defined
+// only in calendar_dates.txt, they span its earliest and latest dates there.
 type Service struct {
 	Id           string
 	Monday       bool
@@ -1454,6 +1457,12 @@ func parseCalendarDates(csv *csv.File, m map[string]Service, timezone *time.Loca
 		return
 	}
 
+	// calendar.txt is parsed first, so services already here came from it.
+	fromCalendar := map[string]bool{}
+	for id := range m {
+		fromCalendar[id] = true
+	}
+
 	for csv.NextRow() {
 		serviceId := serviceIDColumn.Read()
 		date, err := parseTime(dateColumn.Read(), timezone)
@@ -1470,7 +1479,7 @@ func parseCalendarDates(csv *csv.File, m map[string]Service, timezone *time.Loca
 		if !ok {
 			service.StartDate = date
 			service.EndDate = date
-		} else {
+		} else if !fromCalendar[serviceId] {
 			if date.Before(service.StartDate) {
 				service.StartDate = date
 			}
