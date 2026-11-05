@@ -87,6 +87,7 @@ func TestElevatorAlerts(t *testing.T) {
 			ID:               alertID,
 			Cause:            gtfs.Maintenance,
 			Effect:           gtfs.AccessibilityIssue,
+			HasEffect:        true,
 			InformedEntities: informedEntites,
 		}
 	}

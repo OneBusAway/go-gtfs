@@ -396,8 +396,9 @@ func TestRealtime(t *testing.T) {
 								DirectionID: gtfs.DirectionID_True,
 							},
 						},
-						Cause:  gtfsrt.Alert_CONSTRUCTION,
-						Effect: gtfsrt.Alert_SIGNIFICANT_DELAYS,
+						Cause:     gtfsrt.Alert_CONSTRUCTION,
+						Effect:    gtfsrt.Alert_SIGNIFICANT_DELAYS,
+						HasEffect: true,
 						URL: []gtfs.AlertText{
 							{
 								Text:     "UrlText",
@@ -513,8 +514,9 @@ func TestRealtime(t *testing.T) {
 								RouteType: gtfs.RouteType_Unknown,
 							},
 						},
-						Cause:  gtfsrt.Alert_CONSTRUCTION,
-						Effect: gtfsrt.Alert_SIGNIFICANT_DELAYS,
+						Cause:     gtfsrt.Alert_CONSTRUCTION,
+						Effect:    gtfsrt.Alert_SIGNIFICANT_DELAYS,
+						HasEffect: true,
 						URL: []gtfs.AlertText{
 							{
 								Text:     "UrlText",
@@ -580,8 +582,9 @@ func TestRealtime(t *testing.T) {
 								RouteType: gtfs.RouteType_Unknown,
 							},
 						},
-						Cause:  gtfsrt.Alert_CONSTRUCTION,
-						Effect: gtfsrt.Alert_SIGNIFICANT_DELAYS,
+						Cause:     gtfsrt.Alert_CONSTRUCTION,
+						Effect:    gtfsrt.Alert_SIGNIFICANT_DELAYS,
+						HasEffect: true,
 						URL: []gtfs.AlertText{
 							{
 								Text:     "UrlText",
@@ -642,8 +645,9 @@ func TestRealtime(t *testing.T) {
 								DirectionID: gtfs.DirectionID_True,
 							},
 						},
-						Cause:  gtfsrt.Alert_CONSTRUCTION,
-						Effect: gtfsrt.Alert_SIGNIFICANT_DELAYS,
+						Cause:     gtfsrt.Alert_CONSTRUCTION,
+						Effect:    gtfsrt.Alert_SIGNIFICANT_DELAYS,
+						HasEffect: true,
 						URL: []gtfs.AlertText{
 							{
 								Text:     "UrlText",
@@ -706,8 +710,9 @@ func TestRealtime(t *testing.T) {
 								RouteType: gtfs.RouteType_Subway,
 							},
 						},
-						Cause:  gtfsrt.Alert_CONSTRUCTION,
-						Effect: gtfsrt.Alert_SIGNIFICANT_DELAYS,
+						Cause:     gtfsrt.Alert_CONSTRUCTION,
+						Effect:    gtfsrt.Alert_SIGNIFICANT_DELAYS,
+						HasEffect: true,
 						URL: []gtfs.AlertText{
 							{
 								Text:     "UrlText",
@@ -775,8 +780,9 @@ func TestRealtime(t *testing.T) {
 								RouteType: gtfs.RouteType_Unknown,
 							},
 						},
-						Cause:  gtfsrt.Alert_CONSTRUCTION,
-						Effect: gtfsrt.Alert_SIGNIFICANT_DELAYS,
+						Cause:     gtfsrt.Alert_CONSTRUCTION,
+						Effect:    gtfsrt.Alert_SIGNIFICANT_DELAYS,
+						HasEffect: true,
 						URL: []gtfs.AlertText{
 							{
 								Text:     "UrlText",
@@ -850,8 +856,9 @@ func TestRealtime(t *testing.T) {
 								EndsAt:   ptr(time2),
 							},
 						},
-						Cause:  gtfsrt.Alert_CONSTRUCTION,
-						Effect: gtfsrt.Alert_SIGNIFICANT_DELAYS,
+						Cause:     gtfsrt.Alert_CONSTRUCTION,
+						Effect:    gtfsrt.Alert_SIGNIFICANT_DELAYS,
+						HasEffect: true,
 						URL: []gtfs.AlertText{
 							{
 								Text:     "UrlText",
@@ -913,8 +920,9 @@ func TestRealtime(t *testing.T) {
 								RouteType: gtfs.RouteType_Unknown,
 							},
 						},
-						Cause:  gtfsrt.Alert_CONSTRUCTION,
-						Effect: gtfsrt.Alert_SIGNIFICANT_DELAYS,
+						Cause:     gtfsrt.Alert_CONSTRUCTION,
+						Effect:    gtfsrt.Alert_SIGNIFICANT_DELAYS,
+						HasEffect: true,
 						URL: []gtfs.AlertText{
 							{
 								Text:     "UrlText",
@@ -1090,6 +1098,42 @@ func TestRealtimeAlertIsDeleted(t *testing.T) {
 	for _, alert := range got.Alerts {
 		if alert.IsDeleted != want[alert.ID] {
 			t.Errorf("alert %s IsDeleted = %v, want %v", alert.ID, alert.IsDeleted, want[alert.ID])
+		}
+	}
+}
+
+func TestRealtimeAlertHasEffect(t *testing.T) {
+	missing := buildBaseRtAlert()
+	missing.Effect = nil
+	explicitUnknown := buildBaseRtAlert()
+	explicitUnknown.Effect = ptr(gtfsrt.Alert_UNKNOWN_EFFECT)
+	in := []*gtfsrt.FeedEntity{
+		{Id: ptr("missing"), Alert: missing},
+		{Id: ptr("explicit-unknown"), Alert: explicitUnknown},
+		{Id: ptr("significant-delays"), Alert: buildBaseRtAlert()},
+	}
+	header := &gtfsrt.FeedHeader{
+		GtfsRealtimeVersion: ptr("2.0"),
+		Timestamp:           ptr(uint64(createTime.Unix())),
+	}
+	got := testutil.MustParse(t, header, in, &gtfs.ParseRealtimeOptions{})
+
+	type result struct {
+		effect    gtfs.AlertEffect
+		hasEffect bool
+	}
+	want := map[string]result{
+		"missing":            {gtfs.UnknownEffect, false},
+		"explicit-unknown":   {gtfs.UnknownEffect, true},
+		"significant-delays": {gtfs.SignificantDelays, true},
+	}
+	if len(got.Alerts) != len(want) {
+		t.Fatalf("got %d alerts, want %d", len(got.Alerts), len(want))
+	}
+	for _, alert := range got.Alerts {
+		if g := (result{alert.Effect, alert.HasEffect}); g != want[alert.ID] {
+			t.Errorf("alert %s: got Effect=%v HasEffect=%v, want Effect=%v HasEffect=%v",
+				alert.ID, g.effect, g.hasEffect, want[alert.ID].effect, want[alert.ID].hasEffect)
 		}
 	}
 }
