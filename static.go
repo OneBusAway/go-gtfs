@@ -2334,13 +2334,20 @@ func newShapeReader(f *csv.File) (*shapeReader, []string) {
 func (r *shapeReader) eachRow(accept func(shapeID string, row ShapeRow) bool) {
 	for r.file.NextRow() {
 		shapeID := r.shapeIDColumn.Read()
-		shapePtLat := parseFloat64(r.shapePtLatColumn.Read())
-		shapePtLon := parseFloat64(r.shapePtLonColumn.Read())
-		shapePtSequence := parseInt32(r.shapePtSequenceColumn.Read())
+		rawShapePtLat := r.shapePtLatColumn.Read()
+		rawShapePtLon := r.shapePtLonColumn.Read()
+		rawShapePtSequence := r.shapePtSequenceColumn.Read()
+		shapePtLat := parseFloat64(rawShapePtLat)
+		shapePtLon := parseFloat64(rawShapePtLon)
+		shapePtSequence := parseInt32(rawShapePtSequence)
 		shapeDistTraveled := parseFloat64(r.shapeDistTraveledColumn.Read())
 
 		if missingKeys := r.file.MissingRowKeys(); len(missingKeys) > 0 {
 			log.Printf("Skipping shape because of missing keys %s", missingKeys)
+			continue
+		}
+		if shapePtLat == nil || shapePtLon == nil || shapePtSequence == nil {
+			log.Printf("Skipping shape point because shape_pt_lat %q, shape_pt_lon %q or shape_pt_sequence %q is not a number", rawShapePtLat, rawShapePtLon, rawShapePtSequence)
 			continue
 		}
 
