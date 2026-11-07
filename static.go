@@ -1411,7 +1411,7 @@ func parseInt32(s string) *int32 {
 	if s == "" {
 		return nil
 	}
-	i, err := strconv.ParseInt(s, 10, 32)
+	i, err := strconv.ParseInt(strings.TrimSpace(s), 10, 32)
 	if err != nil {
 		return nil
 	}

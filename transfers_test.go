@@ -143,6 +143,11 @@ func TestParseTransfers(t *testing.T) {
 			wantSummary: []string{"from=S1 to=S1 fromRoute= toRoute= fromTrip= toTrip= type=REQUIRES_TIME min=180"},
 		},
 		{
+			desc:        "padded min_transfer_time is trimmed",
+			transfers:   []string{header, "S1,S1,,,,,2, 5 "},
+			wantSummary: []string{"from=S1 to=S1 fromRoute= toRoute= fromTrip= toTrip= type=REQUIRES_TIME min=5"},
+		},
+		{
 			desc:        "minimum time transfer within one station",
 			transfers:   []string{header, "ST,ST,,,,,2,300"},
 			wantSummary: []string{"from=ST to=ST fromRoute= toRoute= fromTrip= toTrip= type=REQUIRES_TIME min=300"},
