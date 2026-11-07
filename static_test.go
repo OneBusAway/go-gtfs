@@ -858,6 +858,17 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
+			desc: "booking rule with whitespace-padded prior_notice_duration_min is parsed",
+			content: newZipBuilder().add(
+				"booking_rules.txt",
+				"booking_rule_id,booking_type,prior_notice_duration_min",
+				"br_1,1, 5 ",
+			).build(),
+			expected: &Static{
+				BookingRules: []BookingRule{{Id: "br_1", Type: BookingType_SameDay, PriorNoticeDurationMin: ptr(int32(5))}},
+			},
+		},
+		{
 			desc: "booking rule with unparsable type is skipped",
 			content: newZipBuilder().add(
 				"booking_rules.txt",
@@ -2025,6 +2036,35 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
+			desc: "frequencies with padded headway_secs",
+			content: newZipBuilderWithDefaults().add(
+				"frequencies.txt",
+				"trip_id,start_time,end_time,headway_secs",
+				"trip_id,00:00:00,01:00:00, 5 ",
+			).build(),
+			expected: &Static{
+				Agencies: []Agency{defaultAgency},
+				Routes:   []Route{defaultRoute},
+				Services: []Service{defaultService},
+				Stops:    []Stop{defaultStop},
+				Trips: []ScheduledTrip{
+					{
+						ID:      defaultTrip.ID,
+						Route:   &defaultRoute,
+						Service: &defaultService,
+						Frequencies: []Frequency{
+							{
+								StartTime:  0 * time.Hour,
+								EndTime:    1 * time.Hour,
+								Headway:    5 * time.Second,
+								ExactTimes: FrequencyBased,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			desc: "frequencies with blank exact times",
 			content: newZipBuilderWithDefaults().add(
 				"frequencies.txt",
@@ -2490,10 +2530,6 @@ func TestParseStatic_ShapeRowWithUnparsableValueIsSkipped(t *testing.T) {
 			desc:   "sequence not a number",
 			badRow: "sh1,1.1,2.1,abc",
 		},
-		{
-			desc:   "sequence with spaces",
-			badRow: "sh1,1.1,2.1, 3 ",
-		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			content := newZipBuilderWithDefaults().add(
@@ -2529,6 +2565,42 @@ func TestParseStatic_ShapeRowWithUnparsableValueIsSkipped(t *testing.T) {
 				t.Errorf("ParseStaticStream shapes got != want, diff=%s", diff)
 			}
 		})
+	}
+}
+
+func TestParseStatic_ShapeSequenceWithSpacesIsKept(t *testing.T) {
+	content := newZipBuilderWithDefaults().add(
+		"trips.txt",
+		"route_id,service_id,trip_id,shape_id",
+		"route_id,service_id,trip_id,sh1",
+	).add(
+		"shapes.txt",
+		"shape_id,shape_pt_lat,shape_pt_lon,shape_pt_sequence",
+		"sh1,1.0,2.0,1",
+		"sh1,1.1,2.1, 3 ",
+		"sh1,1.2,2.2,4",
+	).build()
+
+	want := []Shape{{
+		ID: "sh1",
+		Points: []ShapePoint{
+			{Latitude: 1.0, Longitude: 2.0},
+			{Latitude: 1.1, Longitude: 2.1},
+			{Latitude: 1.2, Longitude: 2.2},
+		},
+	}}
+
+	static, err := ParseStatic(content, ParseStaticOptions{})
+	if err != nil {
+		t.Fatalf("ParseStatic() got error %v, want nil", err)
+	}
+	if diff := cmp.Diff(want, static.Shapes); diff != "" {
+		t.Errorf("ParseStatic shapes got != want, diff=%s", diff)
+	}
+
+	streamed := streamedStatic(t, content, ParseStaticOptions{})
+	if diff := cmp.Diff(want, streamed.Shapes); diff != "" {
+		t.Errorf("ParseStaticStream shapes got != want, diff=%s", diff)
 	}
 }
 
