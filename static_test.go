@@ -2471,6 +2471,67 @@ func TestParseStatic_CarsAllowed(t *testing.T) {
 	}
 }
 
+func TestParseStatic_ShapeRowWithUnparsableValueIsSkipped(t *testing.T) {
+	const header = "shape_id,shape_pt_lat,shape_pt_lon,shape_pt_sequence"
+
+	for _, tc := range []struct {
+		desc   string
+		badRow string
+	}{
+		{
+			desc:   "lat not a number",
+			badRow: "sh1,abc,2.1,2",
+		},
+		{
+			desc:   "lon not a number",
+			badRow: "sh1,1.1,abc,2",
+		},
+		{
+			desc:   "sequence not a number",
+			badRow: "sh1,1.1,2.1,abc",
+		},
+		{
+			desc:   "sequence with spaces",
+			badRow: "sh1,1.1,2.1, 3 ",
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			content := newZipBuilderWithDefaults().add(
+				"trips.txt",
+				"route_id,service_id,trip_id,shape_id",
+				"route_id,service_id,trip_id,sh1",
+			).add(
+				"shapes.txt",
+				header,
+				"sh1,1.0,2.0,1",
+				tc.badRow,
+				"sh1,1.2,2.2,4",
+			).build()
+
+			want := []Shape{{
+				ID: "sh1",
+				Points: []ShapePoint{
+					{Latitude: 1.0, Longitude: 2.0},
+					{Latitude: 1.2, Longitude: 2.2},
+				},
+			}}
+
+			static, err := ParseStatic(content, ParseStaticOptions{})
+			if err != nil {
+				t.Fatalf("ParseStatic() got error %v, want nil", err)
+			}
+			if diff := cmp.Diff(want, static.Shapes); diff != "" {
+				t.Errorf("ParseStatic shapes got != want, diff=%s", diff)
+			}
+
+			streamed := streamedStatic(t, content, ParseStaticOptions{})
+			if diff := cmp.Diff(want, streamed.Shapes); diff != "" {
+				t.Errorf("ParseStaticStream shapes got != want, diff=%s", diff)
+			}
+		})
+	}
+}
+
 func TestParseStatic_ContinuousPickupDropOffDefaultToNo(t *testing.T) {
 	// GTFS defaults continuous_pickup/continuous_drop_off to 1 (No), unlike
 	// pickup_type/drop_off_type which default to 0 (Yes). This pins that
