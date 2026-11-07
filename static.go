@@ -2347,7 +2347,7 @@ func (r *shapeReader) eachRow(accept func(shapeID string, row ShapeRow) bool) {
 			continue
 		}
 		if shapePtLat == nil || shapePtLon == nil || shapePtSequence == nil {
-			log.Printf("Skipping shape point because shape_pt_lat %q, shape_pt_lon %q or shape_pt_sequence %q is not a number", rawShapePtLat, rawShapePtLon, rawShapePtSequence)
+			log.Printf("Skipping shape point for shape_id %q because shape_pt_lat %q, shape_pt_lon %q or shape_pt_sequence %q is not a number", shapeID, rawShapePtLat, rawShapePtLon, rawShapePtSequence)
 			continue
 		}
 
